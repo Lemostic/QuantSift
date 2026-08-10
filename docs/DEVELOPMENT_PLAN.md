@@ -83,6 +83,8 @@ Acceptance criteria:
 
 ## Slice 3: Scheduled Scanning
 
+Status: implemented for the application-running lifecycle.
+
 Goal: automatically evaluate the watchlist after a configured market-close
 time while the desktop application is running.
 

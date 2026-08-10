@@ -7,6 +7,8 @@ import { TopBar } from "@/components/layout/top-bar";
 import { CommandPalette } from "@/components/palette/command-palette";
 import { useAppStore } from "@/store/app-store";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useWatchlist } from "@/watchlist/use-watchlist";
+import { useAutomaticScan } from "@/scans/use-scan-center";
 
 interface BackendAppInfo {
   name: string;
@@ -16,9 +18,14 @@ interface BackendAppInfo {
 }
 
 export function AppShell() {
+  const watchlist = useWatchlist();
   const [appInfo, setAppInfo] = useState<BackendAppInfo | null>(null);
   const [backendError, setBackendError] = useState<string | null>(null);
   const trackRecent = useAppStore((s) => s.trackRecent);
+  const activeInstrumentIds = watchlist.entries
+    .filter((entry) => entry.enabled)
+    .map((entry) => entry.instrumentId);
+  useAutomaticScan(activeInstrumentIds);
 
   useEffect(() => {
     invoke<BackendAppInfo>("app_info")

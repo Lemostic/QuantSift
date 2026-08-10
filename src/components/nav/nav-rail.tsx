@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   Home,
   LineChart,
+  CalendarClock,
   type LucideIcon,
   Settings as SettingsIcon,
   Sparkles,
@@ -31,6 +32,7 @@ const PRIMARY_NAV: NavItem[] = [
 const TOOL_NAV: NavItem[] = [
   { to: "/", label: "推荐总览", icon: LineChart },
   { to: "/watchlist", label: "我的观察列表", icon: WalletCards },
+  { to: "/scans", label: "自动扫描", icon: CalendarClock },
 ];
 
 const SYSTEM_NAV: NavItem[] = [

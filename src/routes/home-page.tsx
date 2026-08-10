@@ -17,6 +17,7 @@ import { recordedMarketDataProvider } from "@/data/recorded-provider";
 import { summarizeDashboard } from "@/dashboard/summary";
 import type { Recommendation, RecommendationSignal } from "@/quant/types";
 import { useWatchlist } from "@/watchlist/use-watchlist";
+import { useScanCenter } from "@/scans/use-scan-center";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,7 @@ const signalMeta: Record<
 
 export function HomePage() {
   const watchlist = useWatchlist();
+  const scans = useScanCenter();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +76,11 @@ export function HomePage() {
     }
   };
 
+  const runManualScan = async () => {
+    const run = await scans.runNow(watchedIds);
+    if (run?.status === "completed") await refresh();
+  };
+
   useEffect(() => {
     if (watchlist.ready) void refresh();
   }, [watchlist.ready, watchedIdsKey]);
@@ -96,7 +103,10 @@ export function HomePage() {
         "relative h-auto min-h-full gap-5 px-5 py-5 lg:px-7",
       )}
     >
-      <DashboardHeader loading={loading} onRefresh={() => void refresh()} />
+      <DashboardHeader
+        loading={loading || scans.running}
+        onRefresh={() => void runManualScan()}
+      />
 
       {loading && recommendations.length === 0 ? (
         <DashboardSkeleton />
@@ -134,7 +144,7 @@ export function HomePage() {
             {selected && <RecommendationDetail recommendation={selected} />}
           </section>
 
-          <RecentActivity summary={summary} />
+          <RecentActivity summary={summary} latestRun={scans.runs[0] ?? null} />
         </>
       )}
 
@@ -474,15 +484,24 @@ function ReasonList({
 
 function RecentActivity({
   summary,
+  latestRun,
 }: {
   summary: ReturnType<typeof summarizeDashboard>;
+  latestRun: import("@/scans/types").ScanRun | null;
 }) {
   const events = [
     {
       icon: Activity,
-      title: "观察池扫描完成",
-      detail: `${summary.total} 个标的已计算，平均评分 ${summary.averageScore}`,
-      time: "刚刚",
+      title: latestRun ? "最近一次扫描" : "观察池已计算",
+      detail: latestRun
+        ? `${latestRun.instrumentCount} 个标的 · ${latestRun.buyWatchCount} 个买入观察`
+        : `${summary.total} 个标的已计算，平均评分 ${summary.averageScore}`,
+      time: latestRun
+        ? new Date(latestRun.startedAt).toLocaleTimeString("zh-CN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "本次",
     },
     {
       icon: Target,
