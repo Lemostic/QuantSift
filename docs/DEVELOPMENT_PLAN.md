@@ -38,6 +38,8 @@ Acceptance criteria:
 
 ## Slice 1: Dashboard
 
+Status: implemented.
+
 Goal: make the home screen an operational dashboard rather than a single
 recommendation list.
 
@@ -140,4 +142,3 @@ Acceptance criteria:
 - Portfolio positions, cost basis, and sell-risk signals.
 - OS startup/background scheduling.
 - Provider-specific SMS adapters after selecting a vendor and confirming terms.
-
