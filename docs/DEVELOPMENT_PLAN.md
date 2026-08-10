@@ -59,6 +59,8 @@ Acceptance criteria:
 
 ## Slice 2: Personal Watchlist
 
+Status: implemented.
+
 Goal: let the owner decide which stocks and funds QuantSift follows.
 
 Deliverables:

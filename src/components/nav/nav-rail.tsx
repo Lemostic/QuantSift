@@ -25,12 +25,12 @@ interface NavItem {
 }
 
 const PRIMARY_NAV: NavItem[] = [
-  { to: "/", label: "首页", icon: Home },
+  { to: "/", label: "研究工作台", icon: Home },
 ];
 
 const TOOL_NAV: NavItem[] = [
   { to: "/", label: "推荐总览", icon: LineChart },
-  { to: "/modules/watchlist", label: "我的观察列表", icon: WalletCards },
+  { to: "/watchlist", label: "我的观察列表", icon: WalletCards },
 ];
 
 const SYSTEM_NAV: NavItem[] = [

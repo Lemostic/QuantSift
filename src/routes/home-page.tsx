@@ -16,6 +16,7 @@ import { loadRecommendations } from "@/data/recommendation-service";
 import { recordedMarketDataProvider } from "@/data/recorded-provider";
 import { summarizeDashboard } from "@/dashboard/summary";
 import type { Recommendation, RecommendationSignal } from "@/quant/types";
+import { useWatchlist } from "@/watchlist/use-watchlist";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,16 +42,29 @@ const signalMeta: Record<
 };
 
 export function HomePage() {
+  const watchlist = useWatchlist();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  const watchedIds = useMemo(
+    () =>
+      watchlist.entries
+        .filter((entry) => entry.enabled)
+        .map((entry) => entry.instrumentId),
+    [watchlist.entries],
+  );
+  const watchedIdsKey = watchedIds.join("|");
+
   const refresh = async () => {
     setLoading(true);
     setError(null);
     try {
-      const next = await loadRecommendations(recordedMarketDataProvider);
+      const next = await loadRecommendations(
+        recordedMarketDataProvider,
+        watchedIds,
+      );
       setRecommendations(next);
       setSelectedId((current) => current ?? next[0]?.instrument.id ?? null);
     } catch (cause) {
@@ -61,8 +75,8 @@ export function HomePage() {
   };
 
   useEffect(() => {
-    void refresh();
-  }, []);
+    if (watchlist.ready) void refresh();
+  }, [watchlist.ready, watchedIdsKey]);
 
   const summary = useMemo(
     () => summarizeDashboard(recommendations),
@@ -86,8 +100,11 @@ export function HomePage() {
 
       {loading && recommendations.length === 0 ? (
         <DashboardSkeleton />
-      ) : error ? (
-        <DashboardError message={error} onRetry={() => void refresh()} />
+      ) : error || watchlist.error ? (
+        <DashboardError
+          message={error ?? watchlist.error ?? "未知错误"}
+          onRetry={() => void refresh()}
+        />
       ) : summary.total === 0 ? (
         <DashboardEmpty />
       ) : (

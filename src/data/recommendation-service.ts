@@ -4,8 +4,13 @@ import type { Recommendation } from "@/quant/types";
 
 export async function loadRecommendations(
   provider: MarketDataProvider,
+  instrumentIds?: string[],
 ): Promise<Recommendation[]> {
-  const instruments = await provider.listInstruments();
+  const catalog = await provider.listInstruments();
+  const allowed = instrumentIds ? new Set(instrumentIds) : null;
+  const instruments = allowed
+    ? catalog.filter((instrument) => allowed.has(instrument.id))
+    : catalog;
   const recommendations = await Promise.all(
     instruments.map(async (instrument) => {
       const bars = await provider.getDailyBars(instrument.id, 30);
@@ -14,4 +19,3 @@ export async function loadRecommendations(
   );
   return recommendations.sort((a, b) => b.score - a.score);
 }
-
