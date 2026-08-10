@@ -1,0 +1,411 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/geist/index.css";
+@import "@fontsource-variable/geist-mono/index.css";
+
+/* ============================================================
+   Velora — High-end desktop toolkit, v2 design tokens
+   Palette: Cool neutral base (zinc-tinted), single electric blue
+            primary, three status accents (emerald / amber / rose).
+            Both light and dark variants share the same hue family
+            so the experience feels intentional, not "the dark
+            version is a degraded copy of the light one".
+   Type:    Geist Variable Sans + Geist Mono.
+   Units:   All sizes via Tailwind classes; the framework already
+            uses rem (0.25rem base) so the user gets free browser
+            font-size scaling without losing grid precision.
+   ============================================================ */
+
+@custom-variant dark (&:is(.dark *));
+
+/* ----------------------------------------------------------------
+   Light mode — warm-tinted off-white, not a flat #ffffff
+   ---------------------------------------------------------------- */
+:root {
+  /* Three depth layers so cards and overlays have a real sense of
+     lift without relying on shadow alone. */
+  --background:          oklch(0.985 0.004 80);  /* warm off-white */
+  --background-elevated: oklch(0.995 0.003 80);  /* card / panel */
+  --background-overlay:  oklch(1     0     0);   /* modal / popover */
+  --surface-hero:        oklch(0.99  0.005 80);  /* hero card */
+
+  --foreground:          oklch(0.18  0.015 250);
+  --foreground-muted:    oklch(0.42  0.012 250);
+  --foreground-subtle:   oklch(0.58  0.01  250);
+
+  --border:        oklch(0.91 0.01 250);
+  --border-strong: oklch(0.82 0.014 250);
+
+  /* Single primary — electric blue, slightly deeper so it has body
+     on white. Saturation < 80% per the skill's colour rule. */
+  --primary:           oklch(0.50 0.20 250);
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-glow:      oklch(0.50 0.20 250 / 0.32);
+
+  /* Status accents — also single, never used as backgrounds. */
+  --accent-emerald: oklch(0.58 0.18 152);
+  --accent-amber:   oklch(0.65 0.18  75);
+  --accent-rose:    oklch(0.58 0.22  25);
+
+  /* Ambient gradient halos for hero / empty states. */
+  --ambient-blue:    oklch(0.50 0.20 250 / 0.08);
+  --ambient-emerald: oklch(0.58 0.18 152 / 0.06);
+  --ambient-amber:   oklch(0.65 0.18  75 / 0.05);
+
+  --muted:            oklch(0.96 0.005 250);
+  --muted-foreground: oklch(0.5  0.012 250);
+  --accent:           oklch(0.95 0.005 250);
+  --accent-foreground: oklch(0.18 0.015 250);
+  --destructive:          oklch(0.55 0.22  25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --input:  oklch(0.91 0.01 250);
+  --ring:   oklch(0.50 0.20 250);
+  --radius: 0.5rem;
+}
+
+/* ----------------------------------------------------------------
+   Dark mode — cool charcoal, never #000, with three depth layers
+   and an emerald secondary accent for status surfaces.
+   ---------------------------------------------------------------- */
+.dark {
+  --background:          oklch(0.145 0.008 250);
+  --background-elevated: oklch(0.185 0.012 250);
+  --background-overlay:  oklch(0.225 0.014 250);
+  --surface-hero:        oklch(0.165 0.01  250);
+
+  --foreground:          oklch(0.97  0.005 250);
+  --foreground-muted:    oklch(0.72  0.012 250);
+  --foreground-subtle:   oklch(0.55  0.012 250);
+
+  --border:        oklch(0.30 0.014 250 / 0.85);
+  --border-strong: oklch(0.42 0.016 250);
+
+  --primary:           oklch(0.72 0.17 240);
+  --primary-foreground: oklch(0.14 0 0);
+  --primary-glow:      oklch(0.72 0.17 240 / 0.35);
+
+  --accent-emerald: oklch(0.75 0.17 152);
+  --accent-amber:   oklch(0.82 0.16  75);
+  --accent-rose:    oklch(0.72 0.2   25);
+
+  --ambient-blue:    oklch(0.55 0.20 240 / 0.16);
+  --ambient-emerald: oklch(0.55 0.18 152 / 0.12);
+  --ambient-amber:   oklch(0.65 0.18  75 / 0.10);
+
+  --muted:            oklch(0.22 0.01  250);
+  --muted-foreground: oklch(0.65 0.012 250);
+  --accent:           oklch(0.25 0.014 250);
+  --accent-foreground: oklch(0.97 0.005 250);
+  --destructive:          oklch(0.65 0.22  25);
+  --destructive-foreground: oklch(0.97 0     0);
+  --input:  oklch(0.30 0.014 250);
+  --ring:   oklch(0.72 0.17 240);
+}
+
+@theme inline {
+  --font-sans:
+    "Geist Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    sans-serif;
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, "JetBrains Mono", "Cascadia Code",
+    "Fira Code", monospace;
+
+  --color-background:          var(--background);
+  --color-background-elevated: var(--background-elevated);
+  --color-background-overlay:  var(--background-overlay);
+  --color-surface-hero:        var(--surface-hero);
+  --color-foreground:          var(--foreground);
+  --color-foreground-muted:    var(--foreground-muted);
+  --color-foreground-subtle:   var(--foreground-subtle);
+  --color-border:        var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary:            var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-glow:       var(--primary-glow);
+  --color-accent-emerald: var(--accent-emerald);
+  --color-accent-amber:   var(--accent-amber);
+  --color-accent-rose:    var(--accent-rose);
+  --color-ambient-blue:    var(--ambient-blue);
+  --color-ambient-emerald: var(--ambient-emerald);
+  --color-ambient-amber:   var(--ambient-amber);
+  --color-card:           var(--background-elevated);
+  --color-card-foreground: var(--foreground);
+  --color-popover:          var(--background-overlay);
+  --color-popover-foreground: var(--foreground);
+  --color-secondary:           var(--muted);
+  --color-secondary-foreground: var(--muted-foreground);
+  --color-muted:            var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent:           var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive:          var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-input:  var(--input);
+  --color-ring:   var(--ring);
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  /* Desktop client — chrome text/UI chrome shouldn't be selectable.
+     Allow selection only inside form inputs, textareas, and explicit
+     contenteditable surfaces so users can still copy values. */
+  body {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input,
+  textarea,
+  [contenteditable="true"],
+  [contenteditable="plaintext-only"] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+    text-rendering: optimizeLegibility;
+    background-image: none;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  /* Form controls */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    border-radius: var(--radius-md);
+    background-color: var(--background-elevated);
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    border-radius: 0.25rem;
+  }
+  button {
+    border-radius: var(--radius-md);
+  }
+
+  /* Cursor states — explicit so WebView2 doesn't strip defaults. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a,
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  a[aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    cursor: pointer;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 999px;
+    border: 2px solid var(--background);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+  }
+}
+
+/* Smooth theme transition for backgrounds and borders */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+/* ============================================================
+   Surface utilities — first-class design language, used in JSX
+   ============================================================ */
+
+/* Diffusion shadow: tinted to the bg hue, layered + inset 1px
+   highlight for a physical beveled edge. */
+@utility shadow-diffusion {
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.05) inset,
+    0 0 0 1px oklch(1 0 0 / 0.03),
+    0 24px 48px -20px oklch(0 0 0 / 0.18),
+    0 8px 16px -8px oklch(0 0 0 / 0.08);
+}
+.dark .shadow-diffusion,
+.dark [class*="shadow-diffusion"] {
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.06) inset,
+    0 0 0 1px oklch(0 0 0 / 0.4),
+    0 24px 48px -20px oklch(0 0 0 / 0.6),
+    0 8px 16px -8px oklch(0 0 0 / 0.4);
+}
+
+@utility shadow-diffusion-sm {
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.04) inset,
+    0 4px 12px -4px oklch(0 0 0 / 0.1);
+}
+.dark .shadow-diffusion-sm,
+.dark [class*="shadow-diffusion-sm"] {
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.05) inset,
+    0 4px 12px -4px oklch(0 0 0 / 0.4);
+}
+
+@utility shadow-glow {
+  box-shadow:
+    0 0 0 1px var(--primary-glow),
+    0 0 24px -4px var(--primary-glow);
+}
+
+/* Glass edge: 1px inner border simulating light refraction on a
+   frosted surface. Pair with `backdrop-blur` for true glass. */
+@utility glass-edge {
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 0.1),
+    inset 0 -1px 0 0 oklch(0 0 0 / 0.15);
+}
+.dark .glass-edge,
+.dark [class*="glass-edge"] {
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 0.1),
+    inset 0 -1px 0 0 oklch(0 0 0 / 0.4);
+}
+
+/* Metallic border: 1px gradient via two stacked box-shadows
+   (top lighter, bottom darker) so the edge reads like brushed
+   metal instead of a flat stroke. */
+@utility border-metallic {
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 0.12),
+    inset 0 -1px 0 0 oklch(0 0 0 / 0.08);
+}
+
+/* Hero ambient surface: a multi-stop radial mesh that's heavily
+   desaturated. Place on a .surface-hero container; it does the
+   "this is a hero, not a regular card" work without a single flat
+   colour. */
+@utility surface-hero {
+  background-image:
+    radial-gradient(
+      1200px 600px at 0% 0%,
+      var(--ambient-blue),
+      transparent 60%
+    ),
+    radial-gradient(
+      800px 400px at 100% 100%,
+      var(--ambient-emerald),
+      transparent 50%
+    ),
+    radial-gradient(
+      600px 300px at 50% 50%,
+      var(--ambient-amber),
+      transparent 60%
+    );
+}
+
+/* Subtle dot grid for hero / empty-state backdrop. Masked so the
+   pattern fades at the edges instead of looking like wallpaper. */
+@utility surface-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      var(--border) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      var(--border) 1px,
+      transparent 1px
+    );
+  background-size: 32px 32px;
+  mask-image: radial-gradient(
+    ellipse 80% 60% at 50% 0%,
+    black 30%,
+    transparent 80%
+  );
+}
+
+/* Shimmer keyframe for skeleton loaders */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@utility shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    var(--accent) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+
+/* Subtle pulse for live status indicators */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 var(--primary-glow); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@utility pulse-ring {
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Float keyframe for subtle icon hover drift */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+@utility float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* ============================================================
+   Fixed-position film-grain overlay (hardware accelerated, never
+   repaints the scroll layer). Apply once on <body> for a subtle
+   premium texture. Turned off in light mode to keep the white
+   theme crisp.
+   ============================================================ */
+.dark::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
