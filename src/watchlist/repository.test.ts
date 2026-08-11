@@ -56,5 +56,22 @@ describe("LocalWatchlistRepository", () => {
       },
     ]);
   });
+
+  it("applies a default migration once without re-adding a later removal", async () => {
+    const repository = new LocalWatchlistRepository(new MemoryStorage());
+
+    await repository.seedIfMissing(["CN:510300"]);
+    await repository.applyMigration("add-012734", ["CN:012734"]);
+    expect((await repository.list()).map((entry) => entry.instrumentId)).toEqual([
+      "CN:510300",
+      "CN:012734",
+    ]);
+
+    await repository.remove("CN:012734");
+    await repository.applyMigration("add-012734", ["CN:012734"]);
+    expect((await repository.list()).map((entry) => entry.instrumentId)).toEqual([
+      "CN:510300",
+    ]);
+  });
 });
 

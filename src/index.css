@@ -24,10 +24,10 @@
 :root {
   /* Three depth layers so cards and overlays have a real sense of
      lift without relying on shadow alone. */
-  --background:          oklch(0.985 0.004 80);  /* warm off-white */
-  --background-elevated: oklch(0.995 0.003 80);  /* card / panel */
+  --background:          oklch(0.982 0.004 250);
+  --background-elevated: oklch(0.994 0.003 250);
   --background-overlay:  oklch(1     0     0);   /* modal / popover */
-  --surface-hero:        oklch(0.99  0.005 80);  /* hero card */
+  --surface-hero:        oklch(0.99  0.004 250);
 
   --foreground:          oklch(0.18  0.015 250);
   --foreground-muted:    oklch(0.42  0.012 250);
@@ -68,17 +68,17 @@
    and an emerald secondary accent for status surfaces.
    ---------------------------------------------------------------- */
 .dark {
-  --background:          oklch(0.145 0.008 250);
-  --background-elevated: oklch(0.185 0.012 250);
-  --background-overlay:  oklch(0.225 0.014 250);
-  --surface-hero:        oklch(0.165 0.01  250);
+  --background:          oklch(0.125 0.012 255);
+  --background-elevated: oklch(0.165 0.014 255);
+  --background-overlay:  oklch(0.205 0.016 255);
+  --surface-hero:        oklch(0.145 0.013 255);
 
   --foreground:          oklch(0.97  0.005 250);
   --foreground-muted:    oklch(0.72  0.012 250);
   --foreground-subtle:   oklch(0.55  0.012 250);
 
-  --border:        oklch(0.30 0.014 250 / 0.85);
-  --border-strong: oklch(0.42 0.016 250);
+  --border:        oklch(0.27 0.018 255 / 0.88);
+  --border-strong: oklch(0.39 0.022 255);
 
   --primary:           oklch(0.72 0.17 240);
   --primary-foreground: oklch(0.14 0 0);

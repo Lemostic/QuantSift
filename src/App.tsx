@@ -1,11 +1,37 @@
+import { lazy } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AppShell } from "@/components/layout/app-shell";
-import { HomePage } from "@/routes/home-page";
-import { WatchlistPage } from "@/routes/watchlist-page";
-import { ScansPage } from "@/routes/scans-page";
-import { PreferencesPage } from "@/routes/preferences-page";
-import { NotFoundPage } from "@/routes/not-found-page";
 import { useTheme } from "@/hooks/use-theme";
+
+const HomePage = lazy(() =>
+  import("@/routes/home-page").then((module) => ({ default: module.HomePage })),
+);
+const WatchlistPage = lazy(() =>
+  import("@/routes/watchlist-page").then((module) => ({
+    default: module.WatchlistPage,
+  })),
+);
+const ScansPage = lazy(() =>
+  import("@/routes/scans-page").then((module) => ({ default: module.ScansPage })),
+);
+const AlertsPage = lazy(() =>
+  import("@/routes/alerts-page").then((module) => ({ default: module.AlertsPage })),
+);
+const PortfolioPage = lazy(() =>
+  import("@/routes/portfolio-page").then((module) => ({
+    default: module.PortfolioPage,
+  })),
+);
+const PreferencesPage = lazy(() =>
+  import("@/routes/preferences-page").then((module) => ({
+    default: module.PreferencesPage,
+  })),
+);
+const NotFoundPage = lazy(() =>
+  import("@/routes/not-found-page").then((module) => ({
+    default: module.NotFoundPage,
+  })),
+);
 
 const router = createBrowserRouter([
   {
@@ -14,7 +40,9 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: "watchlist", element: <WatchlistPage /> },
+      { path: "portfolio", element: <PortfolioPage /> },
       { path: "scans", element: <ScansPage /> },
+      { path: "alerts", element: <AlertsPage /> },
       { path: "modules/preferences", element: <PreferencesPage /> },
       { path: "*", element: <NotFoundPage /> },
     ],

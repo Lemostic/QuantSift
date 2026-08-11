@@ -1,220 +1,118 @@
 import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  Home,
-  LineChart,
-  CalendarClock,
-  type LucideIcon,
-  Settings as SettingsIcon,
-  Sparkles,
-  WalletCards,
-} from "lucide-react";
+  BellSimpleRinging,
+  Briefcase,
+  CalendarDots,
+  ChartLineUp,
+  GearSix,
+  ListChecks,
+  Pulse,
+  type Icon,
+} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { Separator } from "@/components/ui/separator";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAppStore } from "@/store/app-store";
 
 interface NavItem {
   to: string;
   label: string;
-  icon: LucideIcon;
+  shortLabel: string;
+  icon: Icon;
 }
 
-const PRIMARY_NAV: NavItem[] = [
-  { to: "/", label: "研究工作台", icon: Home },
+const WORKSPACE_NAV: NavItem[] = [
+  { to: "/", label: "研究工作台", shortLabel: "研究", icon: ChartLineUp },
+  { to: "/watchlist", label: "我的观察列表", shortLabel: "自选", icon: ListChecks },
+  { to: "/portfolio", label: "持仓研究", shortLabel: "持仓", icon: Briefcase },
+  { to: "/scans", label: "自动扫描", shortLabel: "扫描", icon: CalendarDots },
+  { to: "/alerts", label: "提醒中心", shortLabel: "提醒", icon: BellSimpleRinging },
 ];
-
-const TOOL_NAV: NavItem[] = [
-  { to: "/", label: "推荐总览", icon: LineChart },
-  { to: "/watchlist", label: "我的观察列表", icon: WalletCards },
-  { to: "/scans", label: "自动扫描", icon: CalendarClock },
-];
-
-const SYSTEM_NAV: NavItem[] = [
-  { to: "/modules/preferences", label: "偏好设置", icon: SettingsIcon },
-];
-
-interface NavSectionProps {
-  title?: string;
-  items: NavItem[];
-}
-
-function NavSection({ title, items }: NavSectionProps) {
-  return (
-    <div className="flex flex-col gap-0.5 px-3 py-1">
-      {title && (
-        <div className="px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground/60">
-          {title}
-        </div>
-      )}
-      {items.map((item) => (
-        <DockLink key={item.to} item={item} />
-      ))}
-    </div>
-  );
-}
-
-function DockLink({ item }: { item: NavItem }) {
-  const Icon = item.icon;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <NavLink
-          to={item.to}
-          end={item.to === "/"}
-          className={({ isActive }) =>
-            cn(
-              "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
-              isActive
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              {isActive && (
-                <motion.span
-                  layoutId="nav-active-indicator"
-                  className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full bg-primary"
-                  transition={{ type: "spring", stiffness: 300, damping: 28 }}
-                />
-              )}
-              <span
-                className={cn(
-                  "grid h-7 w-7 shrink-0 place-items-center rounded-md transition-colors",
-                  isActive
-                    ? "bg-primary/15 text-primary"
-                    : "bg-transparent text-current group-hover:bg-background/40",
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-              </span>
-              <span className="truncate">{item.label}</span>
-            </>
-          )}
-        </NavLink>
-      </TooltipTrigger>
-      <TooltipContent side="right">{item.label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function CollapsedLink({ item }: { item: NavItem }) {
-  const Icon = item.icon;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <NavLink
-          to={item.to}
-          end={item.to === "/"}
-          className={({ isActive }) =>
-            cn(
-              "relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
-              isActive
-                ? "bg-accent text-foreground"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              {isActive && (
-                <motion.span
-                  layoutId="nav-active-indicator"
-                  className="absolute -left-0.5 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full bg-primary"
-                  transition={{ type: "spring", stiffness: 300, damping: 28 }}
-                />
-              )}
-              <Icon
-                className={cn("h-4 w-4", isActive && "text-primary")}
-                strokeWidth={1.75}
-              />
-            </>
-          )}
-        </NavLink>
-      </TooltipTrigger>
-      <TooltipContent side="right">{item.label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-function CollapsedSection({ title, items }: NavSectionProps) {
-  return (
-    <div className="flex flex-col items-center gap-0.5 px-1 py-1">
-      {title && (
-        <div className="my-1 h-px w-6 bg-border" />
-      )}
-      {items.map((item) => (
-        <CollapsedLink key={item.to} item={item} />
-      ))}
-    </div>
-  );
-}
 
 export function NavRail() {
-  const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
-
   return (
-    <aside
-      className={cn(
-        "flex h-full shrink-0 flex-col border-r border-metallic bg-background-elevated/40 backdrop-blur-2xl transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-        sidebarCollapsed ? "w-[68px]" : "w-[248px]",
-      )}
-    >
-      {/* Brand */}
-      <div className="flex h-16 items-center gap-2.5 border-b border-metallic px-4">
-        <div className="relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-primary shadow-glow ring-1 ring-inset ring-white/10">
-          <Sparkles className="h-4 w-4 text-primary-foreground" strokeWidth={2} />
-        </div>
-        {!sidebarCollapsed && (
-          <div className="flex flex-col leading-tight">
-            <span className="text-[15px] font-semibold tracking-tight">
-              QuantSift
-            </span>
-            <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-foreground-muted">
-              v0.1.0 · 日频
-            </span>
-          </div>
-        )}
+    <aside className="relative flex h-full w-[68px] shrink-0 flex-col border-r border-border/80 bg-background-elevated/70 sm:w-[82px]">
+      <div className="grid h-[72px] place-items-center border-b border-border/70">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <NavLink
+              to="/"
+              aria-label="QuantSift 研究工作台"
+              className="relative grid h-10 w-10 place-items-center rounded-md bg-primary text-primary-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition-transform active:scale-[0.96]"
+            >
+              <Pulse size={22} weight="bold" />
+              <motion.span
+                className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-background-elevated bg-accent-emerald"
+                animate={{ scale: [1, 1.22, 1] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </NavLink>
+          </TooltipTrigger>
+          <TooltipContent side="right">QuantSift · 日频研究</TooltipContent>
+        </Tooltip>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-1 py-3">
-          {sidebarCollapsed ? (
+      <nav className="flex flex-1 flex-col items-center gap-2 px-2 py-4">
+        {WORKSPACE_NAV.map((item) => (
+          <RailLink key={item.to} item={item} />
+        ))}
+      </nav>
+
+      <div className="border-t border-border/70 px-2 py-3">
+        <RailLink
+          item={{
+            to: "/modules/preferences",
+            label: "偏好设置",
+            shortLabel: "设置",
+            icon: GearSix,
+          }}
+        />
+      </div>
+    </aside>
+  );
+}
+
+function RailLink({ item }: { item: NavItem }) {
+  const IconComponent = item.icon;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <NavLink
+          to={item.to}
+          end={item.to === "/"}
+          aria-label={item.label}
+          className={({ isActive }) =>
+            cn(
+              "group relative flex h-[52px] w-full flex-col items-center justify-center gap-1 rounded-md text-[9px] font-medium transition-colors active:scale-[0.98] sm:h-[56px]",
+              isActive
+                ? "bg-primary/[0.11] text-primary"
+                : "text-foreground-subtle hover:bg-accent/70 hover:text-foreground",
+            )
+          }
+        >
+          {({ isActive }) => (
             <>
-              <CollapsedSection items={PRIMARY_NAV} />
-              <CollapsedSection title="·" items={TOOL_NAV} />
-              <CollapsedSection title="·" items={SYSTEM_NAV} />
-            </>
-          ) : (
-            <>
-              <NavSection items={PRIMARY_NAV} />
-              <Separator className="mx-3 my-2 opacity-50" />
-              <NavSection title="工具" items={TOOL_NAV} />
-              <Separator className="mx-3 my-2 opacity-50" />
-              <NavSection title="系统" items={SYSTEM_NAV} />
+              {isActive && (
+                <motion.span
+                  layoutId="nav-signal"
+                  className="absolute -left-2 top-2 bottom-2 w-0.5 rounded-full bg-primary"
+                  transition={{ type: "spring", stiffness: 220, damping: 24 }}
+                />
+              )}
+              <IconComponent
+                size={20}
+                weight={isActive ? "fill" : "regular"}
+                className="transition-transform duration-300 group-hover:-translate-y-0.5"
+              />
+              <span>{item.shortLabel}</span>
             </>
           )}
-        </div>
-      </ScrollArea>
-
-      {!sidebarCollapsed && (
-        <div className="border-t border-metallic px-4 py-3">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.12em] text-foreground-muted">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inset-0 animate-ping rounded-full bg-accent-emerald/60" />
-              <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-accent-emerald" />
-            </span>
-            Tauri 运行时
-          </div>
-        </div>
-      )}
-    </aside>
+        </NavLink>
+      </TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
   );
 }

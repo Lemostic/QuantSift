@@ -16,6 +16,24 @@ export default defineConfig(async () => ({
     },
   },
 
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@radix-ui")) return "radix-vendor";
+          if (id.includes("framer-motion")) return "motion-vendor";
+          if (id.includes("lightweight-charts")) return "chart-vendor";
+          if (id.includes("lucide-react") || id.includes("@phosphor-icons")) {
+            return "icons-vendor";
+          }
+          if (id.includes("zustand")) return "state-vendor";
+          return "vendor";
+        },
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   clearScreen: false,
   server: {

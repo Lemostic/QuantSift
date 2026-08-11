@@ -59,7 +59,7 @@ Acceptance criteria:
 
 ## Slice 2: Personal Watchlist
 
-Status: implemented.
+Status: implemented and extended with chart-based signal review.
 
 Goal: let the owner decide which stocks and funds QuantSift follows.
 
@@ -70,6 +70,8 @@ Deliverables:
 - Optional tags and a personal observation note per instrument.
 - Local persisted watchlist with a versioned schema and safe migration.
 - Empty state that leads directly to adding the first instrument.
+- Default monitoring migration for fund 012734 (易方达人工智能ETF联接C).
+- Stock and fund daily K-line review with deterministic historical buy-window markers.
 
 Public test seam:
 
@@ -80,6 +82,7 @@ Acceptance criteria:
 - Stock and fund entries use the same workflow while retaining their type.
 - Restarting the app restores the watchlist and notes.
 - Removing an item does not delete market data or scan history.
+- K-line markers explain whether they represent a trend breakout or pullback confirmation.
 
 ## Slice 3: Scheduled Scanning
 
@@ -116,6 +119,8 @@ Constraint:
 
 ## Slice 4: Scheduled SMS Alerts
 
+Status: implemented with simulation and explicit HTTPS webhook modes.
+
 Goal: notify the owner when a scheduled scan produces actionable signals.
 
 Deliverables:
@@ -125,6 +130,7 @@ Deliverables:
 - `SmsGateway` boundary with simulation and generic HTTPS webhook adapters.
 - Local outbox with queued/sent/failed states and retry metadata.
 - Test-message action and scan-to-alert integration.
+- Route-level code splitting for the dashboard, K-line tools, and alert center.
 
 Public test seam:
 
@@ -138,11 +144,68 @@ Acceptance criteria:
 - Duplicate scan results do not create duplicate SMS jobs.
 - Phone numbers and secrets are masked in UI and excluded from Git.
 
+## Slice 5: Portfolio Positions
+
+Status: implemented with local cost-basis and exit-risk review.
+
+Goal: close the loop between a research signal and a user's existing position
+without connecting a broker or turning the product into an execution terminal.
+
+Deliverables:
+
+- Versioned local portfolio repository keyed by instrument.
+- Quantity, average cost, opened date, note, stop-loss and take-profit review
+  thresholds.
+- Deterministic market-value, unrealized P/L, daily P/L and risk-review engine.
+- Portfolio page with editable inspector and K-line handoff.
+- Risk review states for stop-loss, take-profit and trend deterioration.
+
+Public test seam:
+
+- `PortfolioRepository`: list, upsert, validation and remove.
+- `buildPositionSnapshot` and `summarizePortfolio`: deterministic cost-basis
+  and risk calculations.
+
+Acceptance criteria:
+
+- Position records stay local and never imply an order or broker action.
+- A recommendation provider failure does not corrupt saved cost basis.
+- Risk labels explain the threshold or research signal that triggered review.
+- Empty, loading, invalid-input and populated portfolio states are usable at
+  desktop and compact widths.
+
+## Slice 6: Explainable Signal Intelligence
+
+Status: implemented with deterministic daily-bar analysis.
+
+Goal: add an intelligence layer that prioritizes research without hiding the
+evidence or sending local financial data to an external model.
+
+Deliverables:
+
+- Factor-consensus, rolling-signal-stability and data-completeness measures.
+- Explainable market-regime classification and research priority.
+- Ten-day support/resistance levels and explicit next-review conditions.
+- Intelligence panels in the research dashboard and K-line workspace.
+- Clear disclosure that confidence is consistency, not return probability.
+
+Public test seam:
+
+- `buildSignalIntelligence`: deterministic assessment from normalized bars.
+- `buildRollingSignalHistory`: prefix-only historical decisions without
+  look-ahead.
+
+Acceptance criteria:
+
+- Changing a future bar cannot alter an earlier rolling decision.
+- Every action title includes evidence, uncertainty and a market date.
+- Incomplete history is rejected instead of producing false confidence.
+- The intelligence panel works for both stocks and funds.
+
 ## Later Slices
 
 - AKShare Python sidecar with recorded contract fixtures.
 - SQLite normalized cache and incremental refresh.
 - Backtesting with fees, slippage, and look-ahead prevention.
-- Portfolio positions, cost basis, and sell-risk signals.
 - OS startup/background scheduling.
 - Provider-specific SMS adapters after selecting a vendor and confirming terms.

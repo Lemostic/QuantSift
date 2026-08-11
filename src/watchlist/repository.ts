@@ -20,12 +20,19 @@ export interface StorageAdapter {
 export interface WatchlistRepository {
   list(): Promise<WatchlistEntry[]>;
   seedIfMissing(instrumentIds: string[]): Promise<void>;
+  applyMigration(migrationId: string, instrumentIds: string[]): Promise<void>;
   add(instrumentId: string): Promise<WatchlistEntry>;
   update(instrumentId: string, update: WatchlistUpdate): Promise<WatchlistEntry>;
   remove(instrumentId: string): Promise<void>;
 }
 
 interface WatchlistDocument {
+  version: 2;
+  entries: WatchlistEntry[];
+  appliedMigrations: string[];
+}
+
+interface LegacyWatchlistDocument {
   version: 1;
   entries: WatchlistEntry[];
 }
@@ -78,7 +85,7 @@ export class LocalWatchlistRepository implements WatchlistRepository {
     if (this.storage.getItem(this.key) !== null) return;
     const addedAt = this.now().toISOString();
     this.write({
-      version: 1,
+      version: 2,
       entries: instrumentIds.map((instrumentId) => ({
         instrumentId,
         note: "",
@@ -86,7 +93,31 @@ export class LocalWatchlistRepository implements WatchlistRepository {
         enabled: true,
         addedAt,
       })),
+      appliedMigrations: [],
     });
+  }
+
+  async applyMigration(
+    migrationId: string,
+    instrumentIds: string[],
+  ): Promise<void> {
+    const document = this.read();
+    if (document.appliedMigrations.includes(migrationId)) return;
+
+    const existingIds = new Set(document.entries.map((entry) => entry.instrumentId));
+    const addedAt = this.now().toISOString();
+    for (const instrumentId of instrumentIds) {
+      if (existingIds.has(instrumentId)) continue;
+      document.entries.push({
+        instrumentId,
+        note: "人工智能主题基金，等待回踩确认",
+        tags: ["重点监控", "AI主题"],
+        enabled: true,
+        addedAt,
+      });
+    }
+    document.appliedMigrations.push(migrationId);
+    this.write(document);
   }
 
   async add(instrumentId: string): Promise<WatchlistEntry> {
@@ -138,20 +169,32 @@ export class LocalWatchlistRepository implements WatchlistRepository {
 
   private read(): WatchlistDocument {
     const raw = this.storage.getItem(this.key);
-    if (raw === null) return { version: 1, entries: [] };
+    if (raw === null) return { version: 2, entries: [], appliedMigrations: [] };
     try {
-      const parsed = JSON.parse(raw) as Partial<WatchlistDocument>;
+      const parsed = JSON.parse(raw) as Partial<WatchlistDocument> | Partial<LegacyWatchlistDocument>;
       if (
-        parsed.version === 1 &&
         Array.isArray(parsed.entries) &&
         parsed.entries.every(isWatchlistEntry)
       ) {
-        return { version: 1, entries: parsed.entries };
+        if (parsed.version === 2) {
+          return {
+            version: 2,
+            entries: parsed.entries,
+            appliedMigrations: Array.isArray((parsed as Partial<WatchlistDocument>).appliedMigrations)
+              ? (parsed as Partial<WatchlistDocument>).appliedMigrations!.filter(
+                  (value): value is string => typeof value === "string",
+                )
+              : [],
+          };
+        }
+        if (parsed.version === 1) {
+          return { version: 2, entries: parsed.entries, appliedMigrations: [] };
+        }
       }
     } catch {
       // Fall through to a safe empty document; the next mutation repairs it.
     }
-    return { version: 1, entries: [] };
+    return { version: 2, entries: [], appliedMigrations: [] };
   }
 
   private write(document: WatchlistDocument) {

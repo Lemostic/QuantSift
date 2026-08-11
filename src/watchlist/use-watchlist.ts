@@ -6,7 +6,7 @@ import {
 } from "./repository";
 
 const WATCHLIST_CHANGED_EVENT = "quantsift:watchlist-changed";
-const DEFAULT_INSTRUMENT_IDS = ["CN:510300", "CN:600519", "CN:159915"];
+const DEFAULT_INSTRUMENT_IDS = ["CN:510300", "CN:600519", "CN:159915", "CN:012734"];
 
 let browserRepository: LocalWatchlistRepository | null = null;
 
@@ -30,6 +30,7 @@ export function useWatchlist() {
     try {
       const repository = getRepository();
       await repository.seedIfMissing(DEFAULT_INSTRUMENT_IDS);
+      await repository.applyMigration("2026-08-add-012734", ["CN:012734"]);
       setEntries(await repository.list());
       setError(null);
     } catch (cause) {

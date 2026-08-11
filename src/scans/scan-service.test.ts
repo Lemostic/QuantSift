@@ -36,5 +36,23 @@ describe("runWatchlistScan", () => {
     expect(store.runs).toHaveLength(1);
     expect(store.runs[0].status).toBe("completed");
   });
+
+  it("keeps a completed scan successful when a post-scan alert hook fails", async () => {
+    const store = new MemoryScanStore();
+
+    const run = await runWatchlistScan({
+      provider: recordedMarketDataProvider,
+      instrumentIds: ["CN:510300"],
+      trigger: "scheduled",
+      store,
+      createId: () => "scan-alert-failure",
+      onCompleted: async () => {
+        throw new Error("短信网关不可用");
+      },
+    });
+
+    expect(run.status).toBe("completed");
+    expect(store.runs[0].status).toBe("completed");
+  });
 });
 

@@ -2,14 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  CornerDownLeft,
+  BellSimpleRinging,
+  Briefcase,
+  CalendarDots,
+  ChartLineUp,
+  ArrowBendDownLeft,
   Eraser,
-  Hash,
-  Search as SearchIcon,
-} from "lucide-react";
-import { enabledModules, type ModuleMeta } from "@/lib/registry";
-import { usePluginStore } from "@/store/plugin-store";
-import { useAppStore } from "@/store/app-store";
+  GearSix,
+  ListChecks,
+  MagnifyingGlass,
+  type Icon,
+} from "@phosphor-icons/react";
 import {
   Dialog,
   DialogContent,
@@ -17,44 +20,75 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-/**
- * 真的「command palette」。
- *
- *  - 全局快捷键 Cmd/Ctrl+K 唤起 / 关闭
- *  - 输入框内实时过滤（按 id、name、description、tags 模糊匹配）
- *  - ↑ / ↓ 在结果集里切换高亮
- *  - Enter 跳到对应路由 + 关闭
- *  - Esc 关闭
- *  - 高亮条用 framer-motion `layoutId` 在结果间滑动，质感像 native Spotlight
- *  - 数据源 = plugin-store 启用的模块（用户禁用过的从结果里剔除）
- */
-
-interface PaletteEntry {
-  module: ModuleMeta;
-  /** fuzzy 评分，越小越相关 */
-  score: number;
+interface WorkspaceCommand {
+  id: string;
+  name: string;
+  description: string;
+  keywords: string[];
+  path: string;
+  icon: Icon;
 }
 
-const SCORE = {
-  ID_HIT: 0,
-  NAME_HIT: 1,
-  TAG_HIT: 2,
-  DESC_HIT: 3,
-  MISS: Infinity,
-};
+const COMMANDS: WorkspaceCommand[] = [
+  {
+    id: "research",
+    name: "研究工作台",
+    description: "查看推荐排名、K 线和动态买点",
+    keywords: ["首页", "行情", "k线", "买点", "信号"],
+    path: "/",
+    icon: ChartLineUp,
+  },
+  {
+    id: "watchlist",
+    name: "监控中心",
+    description: "管理观察列表、备注和标签",
+    keywords: ["自选", "股票", "基金", "监控"],
+    path: "/watchlist",
+    icon: ListChecks,
+  },
+  {
+    id: "portfolio",
+    name: "持仓研究",
+    description: "复核成本、盈亏与退出风险",
+    keywords: ["持仓", "成本", "盈亏", "止损", "止盈", "风险"],
+    path: "/portfolio",
+    icon: Briefcase,
+  },
+  {
+    id: "scans",
+    name: "扫描调度",
+    description: "配置工作日扫描并查看运行历史",
+    keywords: ["自动", "定时", "扫描", "任务"],
+    path: "/scans",
+    icon: CalendarDots,
+  },
+  {
+    id: "alerts",
+    name: "提醒中心",
+    description: "配置提醒策略和本地发件箱",
+    keywords: ["短信", "通知", "webhook", "提醒"],
+    path: "/alerts",
+    icon: BellSimpleRinging,
+  },
+  {
+    id: "preferences",
+    name: "偏好设置",
+    description: "调整主题和内容密度",
+    keywords: ["设置", "主题", "边距", "外观"],
+    path: "/modules/preferences",
+    icon: GearSix,
+  },
+];
 
-function scoreModule(m: ModuleMeta, query: string): number {
-  const q = query.trim().toLowerCase();
-  if (!q) return SCORE.ID_HIT; // 无 query 时所有项排成 registry 顺序
-  // id 命中（按 id 整段或前缀）
-  if (m.id.toLowerCase().includes(q)) return SCORE.ID_HIT;
-  // name 命中
-  if (m.name.toLowerCase().includes(q)) return SCORE.NAME_HIT;
-  // tag 命中
-  if (m.tags?.some((t) => t.toLowerCase().includes(q))) return SCORE.TAG_HIT;
-  // description 命中
-  if (m.description.toLowerCase().includes(q)) return SCORE.DESC_HIT;
-  return SCORE.MISS;
+function matches(command: WorkspaceCommand, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  return [
+    command.id,
+    command.name,
+    command.description,
+    ...command.keywords,
+  ].some((value) => value.toLowerCase().includes(normalized));
 }
 
 export function CommandPalette() {
@@ -64,315 +98,172 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const disabledModules = usePluginStore((s) => s.disabledModules);
-  const recentModules = useAppStore((s) => s.recentModules);
+  const results = useMemo(
+    () => COMMANDS.filter((command) => matches(command, query)),
+    [query],
+  );
 
-  // Global Cmd/Ctrl+K listener.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const k = e.key.toLowerCase();
-      if ((e.metaKey || e.ctrlKey) && k === "k") {
-        e.preventDefault();
-        setOpen((v) => !v);
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setOpen((value) => !value);
       }
     };
+    const openPalette = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("quantsift:open-command-palette", openPalette);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("quantsift:open-command-palette", openPalette);
+    };
   }, []);
 
-  // Reset every time the dialog opens.
   useEffect(() => {
     if (!open) return;
     setQuery("");
     setActive(0);
-    // Autofocus the input slightly after open so Radix mount doesn't steal it.
-    const t = setTimeout(() => inputRef.current?.focus(), 30);
-    return () => clearTimeout(t);
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 30);
+    return () => window.clearTimeout(timer);
   }, [open]);
 
-  // Compute the result list.
-  const results: PaletteEntry[] = useMemo(() => {
-    const enabled = enabledModules(disabledModules);
-    const q = query.trim().toLowerCase();
-    const scored = enabled
-      .map((m) => ({ module: m, score: scoreModule(m, q) }))
-      .filter((e) => e.score !== SCORE.MISS);
-
-    if (!q) {
-      // 空 query：把最近用过的放前面，剩下的保持 registry 顺序。
-      const recentSet = new Set(recentModules);
-      const recents = scored.filter((e) => recentSet.has(e.module.id));
-      recents.sort(
-        (a, b) =>
-          recentModules.indexOf(a.module.id) -
-          recentModules.indexOf(b.module.id),
-      );
-      const others = scored.filter((e) => !recentSet.has(e.module.id));
-      return [...recents, ...others];
-    }
-
-    return scored.sort((a, b) => a.score - b.score);
-  }, [query, disabledModules, recentModules]);
-
-  // Keep `active` clamped when results shrink.
   useEffect(() => {
-    if (active >= results.length) {
-      setActive(Math.max(0, results.length - 1));
-    }
-  }, [results.length, active]);
+    if (active >= results.length) setActive(Math.max(0, results.length - 1));
+  }, [active, results.length]);
 
-  // Auto-scroll active into view.
   useEffect(() => {
     if (!open) return;
-    const el = listRef.current?.querySelector<HTMLElement>(
-      `[data-pal-index="${active}"]`,
-    );
-    el?.scrollIntoView({ block: "nearest" });
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-command-index="${active}"]`)
+      ?.scrollIntoView({ block: "nearest" });
   }, [active, open]);
 
-  function commit(index: number) {
-    const entry = results[index];
-    if (!entry) return;
+  const commit = (index: number) => {
+    const command = results[index];
+    if (!command) return;
     setOpen(false);
-    navigate(entry.module.path);
-  }
-
-  function onInputKey(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive((i) => Math.min(results.length - 1, i + 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((i) => Math.max(0, i - 1));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      commit(active);
-    }
-  }
-
-  const empty = results.length === 0;
+    navigate(command.path);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        // Override Radix default position; we want top-anchored, not centered.
-        className="top-[14vh] max-w-[640px] overflow-hidden p-0"
+        className="top-[14vh] max-w-[620px] overflow-hidden rounded-lg p-0"
         hideClose
-        onKeyDown={(e) => {
-          if (e.key === "Escape") setOpen(false);
-        }}
       >
-        <DialogTitle className="sr-only">命令面板</DialogTitle>
-
-        {/* Search row */}
-        <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3">
-          <SearchIcon
-            className="h-3.5 w-3.5 text-foreground-muted"
-            strokeWidth={1.75}
-          />
+        <DialogTitle className="sr-only">工作区命令</DialogTitle>
+        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+          <MagnifyingGlass size={16} className="text-foreground-muted" />
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
+            onChange={(event) => {
+              setQuery(event.target.value);
               setActive(0);
             }}
-            onKeyDown={onInputKey}
-            placeholder="搜索模块、输入 id 或描述关键字…"
-            className={cn(
-              "flex-1 bg-transparent text-[13px] text-foreground outline-none",
-              "placeholder:text-foreground-subtle",
-            )}
-            spellCheck={false}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setActive((value) => Math.min(results.length - 1, value + 1));
+              } else if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setActive((value) => Math.max(0, value - 1));
+              } else if (event.key === "Enter") {
+                event.preventDefault();
+                commit(active);
+              }
+            }}
+            placeholder="搜索研究、持仓、扫描或提醒"
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-foreground-subtle"
             autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
+            spellCheck={false}
           />
           {query && (
             <button
               type="button"
-              aria-label="清空"
-              onClick={() => {
-                setQuery("");
-                inputRef.current?.focus();
-              }}
-              className="grid h-6 w-6 place-items-center rounded-md text-foreground-muted transition-colors hover:bg-accent/60 hover:text-foreground"
+              onClick={() => setQuery("")}
+              aria-label="清空搜索"
+              className="grid h-7 w-7 place-items-center text-foreground-subtle hover:bg-accent hover:text-foreground active:scale-[0.96]"
             >
-              <Eraser className="h-3 w-3" strokeWidth={1.75} />
+              <Eraser size={14} />
             </button>
           )}
-          <kbd className="rounded border border-border/60 bg-background-overlay/60 px-1.5 py-0.5 font-mono text-[10px] text-foreground-muted">
-            esc
+          <kbd className="rounded border border-border px-1.5 py-0.5 font-mono text-[9px] text-foreground-subtle">
+            ESC
           </kbd>
         </div>
 
-        {/* Result list */}
-        <div
-          ref={listRef}
-          className="max-h-[min(60vh,420px)] overflow-y-auto px-1.5 py-1.5"
-        >
-          {empty ? (
-            <EmptyState query={query} />
+        <div ref={listRef} className="max-h-[420px] overflow-y-auto p-1.5">
+          {results.length === 0 ? (
+            <div className="grid min-h-40 place-items-center px-4 text-center">
+              <div>
+                <MagnifyingGlass size={22} className="mx-auto text-foreground-subtle" />
+                <p className="mt-2 text-xs font-medium">没有匹配的工作区</p>
+                <p className="mt-1 text-[10px] text-foreground-muted">
+                  尝试搜索“持仓”“K线”或“提醒”
+                </p>
+              </div>
+            </div>
           ) : (
             <AnimatePresence initial={false}>
-              {results.map((entry, i) => (
-                <ResultRow
-                  key={entry.module.id}
-                  index={i}
-                  entry={entry}
-                  active={i === active}
-                  onHover={() => setActive(i)}
-                  onSelect={() => commit(i)}
-                />
-              ))}
+              {results.map((command, index) => {
+                const CommandIcon = command.icon;
+                const selected = active === index;
+                return (
+                  <motion.button
+                    key={command.id}
+                    type="button"
+                    data-command-index={index}
+                    initial={{ opacity: 0, y: 3 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    onMouseEnter={() => setActive(index)}
+                    onClick={() => commit(index)}
+                    className="relative grid w-full grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-left outline-none"
+                  >
+                    {selected && (
+                      <motion.span
+                        layoutId="command-highlight"
+                        className="absolute inset-0 rounded-md bg-primary/[0.075]"
+                        transition={{ type: "spring", stiffness: 300, damping: 28 }}
+                      />
+                    )}
+                    <span
+                      className={cn(
+                        "relative grid h-8 w-8 place-items-center rounded-md border",
+                        selected
+                          ? "border-primary/30 bg-primary/10 text-primary"
+                          : "border-border bg-background text-foreground-muted",
+                      )}
+                    >
+                      <CommandIcon size={16} />
+                    </span>
+                    <span className="relative min-w-0">
+                      <span className="block truncate text-xs font-medium">{command.name}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-foreground-muted">
+                        {command.description}
+                      </span>
+                    </span>
+                    <span className="relative font-mono text-[9px] text-foreground-subtle">
+                      /{command.id}
+                    </span>
+                  </motion.button>
+                );
+              })}
             </AnimatePresence>
           )}
         </div>
 
-        {/* Footer hints */}
-        <div className="flex items-center justify-between border-t border-border/60 bg-background-overlay/30 px-4 py-2 font-mono text-[10px] text-foreground-subtle">
+        <div className="flex items-center justify-between border-t border-border bg-muted/25 px-4 py-2 font-mono text-[9px] text-foreground-subtle">
           <span className="flex items-center gap-3">
-            <Hint k="↑">上</Hint>
-            <Hint k="↓">下</Hint>
-            <Hint k={<CornerDownEnter />}>打开</Hint>
+            <span>↑↓ 选择</span>
+            <span className="flex items-center gap-1">
+              <ArrowBendDownLeft size={11} /> 打开
+            </span>
           </span>
-          <span>
-            {results.length} 个结果 · {disabledModules.length === 0
-              ? "全部启用"
-              : `${disabledModules.length} 个已禁用`}
-          </span>
+          <span>{results.length} 个工作区</span>
         </div>
       </DialogContent>
     </Dialog>
   );
-}
-
-function CornerDownEnter() {
-  return <CornerDownLeft className="h-3 w-3" strokeWidth={1.75} />;
-}
-
-function Hint({ k, children }: { k: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <kbd className="rounded border border-border/60 bg-background-overlay/40 px-1 py-px">
-        {k}
-      </kbd>
-      <span>{children}</span>
-    </span>
-  );
-}
-
-function EmptyState({ query }: { query: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
-      className="flex flex-col items-center gap-2 px-4 py-12 text-center"
-    >
-      <div className="grid h-9 w-9 place-items-center rounded-full border border-border/60 bg-background-overlay/40 text-foreground-muted">
-        <SearchIcon className="h-4 w-4" strokeWidth={1.5} />
-      </div>
-      <div className="text-[13px] font-medium text-foreground">
-        {query ? `没有匹配「${query}」的模块` : "没有可用的模块"}
-      </div>
-      <div className="max-w-xs text-[11px] leading-relaxed text-foreground-muted">
-        {query
-          ? "试试搜「json」、「正则」、模块名片段或 id。也可以去 Preferences 启用更多模块。"
-          : "去 Preferences 启用几个模块再回来。"}
-      </div>
-    </motion.div>
-  );
-}
-
-function ResultRow({
-  index,
-  entry,
-  active,
-  onHover,
-  onSelect,
-}: {
-  index: number;
-  entry: PaletteEntry;
-  active: boolean;
-  onHover: () => void;
-  onSelect: () => void;
-}) {
-  const Icon = entry.module.icon;
-  return (
-    <motion.button
-      type="button"
-      data-pal-index={index}
-      onMouseEnter={onHover}
-      onClick={onSelect}
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-      className={cn(
-        "group relative flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left outline-none",
-        "transition-colors",
-        active ? "text-foreground" : "text-foreground-muted",
-      )}
-    >
-      {/* Sliding highlight bar */}
-      {active && (
-        <motion.span
-          layoutId="palette-highlight"
-          className="absolute inset-0 -z-0 rounded-md bg-primary/[0.08]"
-          transition={{ type: "spring", stiffness: 320, damping: 30 }}
-        />
-      )}
-      <span
-        className={cn(
-          "relative grid h-7 w-7 shrink-0 place-items-center rounded-md border transition-colors",
-          active
-            ? "border-primary/30 bg-primary/10 text-primary"
-            : "border-border/60 bg-background-overlay/40 text-foreground-muted",
-        )}
-      >
-        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-      </span>
-      <span className="relative flex min-w-0 flex-1 items-baseline gap-2">
-        <span className="truncate font-mono text-[12.5px] tracking-tight text-foreground">
-          {entry.module.name}
-        </span>
-        <span className="truncate font-mono text-[10.5px] text-foreground-subtle">
-          <Hash className="mr-0.5 inline h-2.5 w-2.5 align-baseline" strokeWidth={2} />
-          {entry.module.id}
-        </span>
-      </span>
-      <span className="relative flex shrink-0 items-center gap-1.5">
-        <span className="font-mono text-[10px] text-foreground-subtle">
-          {CATEGORY_LABEL[entry.module.category]}
-        </span>
-        <StatusDot status={entry.module.status} />
-      </span>
-    </motion.button>
-  );
-}
-
-const CATEGORY_LABEL = {
-  tools: "工具",
-  files: "文件",
-  convert: "转换",
-  devtools: "开发",
-  search: "搜索",
-  productivity: "效率",
-  system: "系统",
-} as const satisfies Record<ModuleMeta["category"], string>;
-
-function StatusDot({ status }: { status: ModuleMeta["status"] }) {
-  if (status === "ready") {
-    return <span className="h-1.5 w-1.5 rounded-full bg-accent-emerald" />;
-  }
-  if (status === "wip") {
-    return (
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="absolute inset-0 animate-ping rounded-full bg-accent-amber/60" />
-        <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-accent-amber" />
-      </span>
-    );
-  }
-  return <span className="h-1.5 w-1.5 rounded-full bg-foreground-subtle" />;
 }

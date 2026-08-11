@@ -4,6 +4,7 @@ import { LocalScanRepository, DEFAULT_SCAN_SCHEDULE } from "./repository";
 import { getDueScan, type ScanSchedule } from "./scheduler";
 import { runWatchlistScan } from "./scan-service";
 import type { ScanRun, ScanTrigger } from "./types";
+import { processCompletedScanAlerts } from "@/alerts/browser-alerts";
 
 const SCANS_CHANGED_EVENT = "quantsift:scans-changed";
 let browserRepository: LocalScanRepository | null = null;
@@ -35,6 +36,11 @@ async function executeScan(
       trigger,
       scheduledWindowId,
       store: getRepository(),
+      onCompleted:
+        trigger === "scheduled"
+          ? (run, recommendations) =>
+              processCompletedScanAlerts(run, recommendations)
+          : undefined,
     });
   } finally {
     scanInFlight = false;

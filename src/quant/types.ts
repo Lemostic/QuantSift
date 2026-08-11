@@ -1,5 +1,5 @@
 export type InstrumentKind = "stock" | "fund";
-export type Exchange = "SSE" | "SZSE";
+export type Exchange = "SSE" | "SZSE" | "OTC";
 export type AdjustmentMode = "none" | "forward" | "backward";
 
 export interface Instrument {

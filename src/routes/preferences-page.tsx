@@ -1,8 +1,15 @@
 import { motion } from "framer-motion";
-import { Check, Palette, RotateCcw, Sliders, Sparkles } from "lucide-react";
+import {
+  ArrowCounterClockwise,
+  ArrowsHorizontal,
+  ArrowsVertical,
+  Check,
+  Palette,
+  SlidersHorizontal,
+  Sparkle,
+} from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
-import { ModuleHeader } from "@/components/module/module-header";
 import {
   PADDING_MAX,
   PADDING_MIN,
@@ -24,8 +31,21 @@ export function PreferencesPage() {
   const recentModules = useAppStore((s) => s.recentModules);
 
   return (
-    <div className={cn(PAGE_CONTAINER_CLASS, "gap-8")} style={paddingToStyle(contentPadding)}>
-      <ModuleHeader moduleId="preferences" />
+    <div
+      className={cn(PAGE_CONTAINER_CLASS, "h-auto min-h-full gap-5 max-sm:!px-4 max-sm:!py-4")}
+      style={paddingToStyle(contentPadding)}
+    >
+      <header className="border-b border-border/70 pb-4">
+        <div className="font-mono text-[9px] font-semibold text-primary">
+          SYSTEM / PREFERENCES
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="text-xl font-semibold sm:text-2xl">偏好设置</h1>
+          <p className="text-[11px] text-foreground-muted sm:text-xs">
+            调整研究界面的密度、主题与本地显示习惯
+          </p>
+        </div>
+      </header>
 
       {/* Live preview — visualises the current vertical/horizontal padding */}
       <PaddingPreview value={contentPadding} />
@@ -34,7 +54,7 @@ export function PreferencesPage() {
       <SettingsGroup
         title="内容边距"
         description="分别控制主区域上下边距和左右边距。上下保持一致、左右保持一致。值越大阅读越舒适；值越小每屏能展示更多内容。点击预设可一键填入，或拖动滑块微调。"
-        icon={<Sliders className="h-4 w-4" />}
+        icon={<SlidersHorizontal className="h-4 w-4" />}
       >
         <PaddingEditor value={contentPadding} onChange={setContentPadding} />
       </SettingsGroup>
@@ -70,7 +90,7 @@ export function PreferencesPage() {
       <SettingsGroup
         title="最近使用"
         description="按访问顺序排列，最多 8 个。"
-        icon={<Sparkles className="h-4 w-4" />}
+        icon={<Sparkle className="h-4 w-4" />}
       >
         {recentModules.length === 0 ? (
           <div className="rounded-lg border border-dashed bg-card/30 p-6 text-center text-sm text-muted-foreground">
@@ -120,7 +140,7 @@ function PaddingPreview({ value }: { value: PagePadding }) {
       </div>
       <div className="bg-[radial-gradient(oklch(0.27_0_0/0.3)_1px,transparent_1px)] [background-size:12px_12px] p-4">
         <div
-          className="mx-auto h-48 max-w-md rounded-xl border border-dashed border-border/60 bg-background/30 transition-[padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          className="mx-auto h-48 max-w-md rounded-lg border border-dashed border-border/60 bg-background/30 transition-[padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
           style={paddingToStyle(value)}
         >
           <div className="h-full rounded-lg border border-dashed border-primary/40 bg-primary/[0.04] p-3">
@@ -170,7 +190,7 @@ function PaddingEditor({
               className={cn(
                 "group relative flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-all",
                 active
-                  ? "border-primary/50 bg-primary/[0.06] shadow-glow"
+                  ? "border-primary/50 bg-primary/[0.06]"
                   : "border-border/60 bg-card/40 hover:border-border hover:bg-card/70",
               )}
             >
@@ -189,7 +209,7 @@ function PaddingEditor({
                     className="grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground"
                     transition={{ type: "spring", stiffness: 300, damping: 24 }}
                   >
-                    <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                    <Check className="h-2.5 w-2.5" weight="bold" />
                   </motion.span>
                 )}
               </div>
@@ -215,14 +235,14 @@ function PaddingEditor({
         <AxisControl
           label="上下边距"
           axis="vertical"
-          icon={<VerticalIcon />}
+          icon={<ArrowsVertical size={14} />}
           value={value.vertical}
           onChange={(v) => update({ vertical: v })}
         />
         <AxisControl
           label="左右边距"
           axis="horizontal"
-          icon={<HorizontalIcon />}
+          icon={<ArrowsHorizontal size={14} />}
           value={value.horizontal}
           onChange={(v) => update({ horizontal: v })}
         />
@@ -276,7 +296,7 @@ function AxisControl({ label, icon, value, onChange }: AxisControlProps) {
               "h-1 flex-1 cursor-pointer appearance-none rounded-full bg-border/60 accent-primary",
               "[&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5",
               "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full",
-              "[&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-glow",
+              "[&::-webkit-slider-thumb]:bg-primary",
               "[&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full",
               "[&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0",
             )}
@@ -305,42 +325,6 @@ function AxisControl({ label, icon, value, onChange }: AxisControlProps) {
         </div>
       </div>
     </div>
-  );
-}
-
-function VerticalIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    >
-      <line x1="7" y1="2" x2="7" y2="12" />
-      <polyline points="4 4.5 7 2 10 4.5" />
-      <polyline points="4 9.5 7 12 10 9.5" />
-    </svg>
-  );
-}
-
-function HorizontalIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    >
-      <line x1="2" y1="7" x2="12" y2="7" />
-      <polyline points="4.5 4 2 7 4.5 10" />
-      <polyline points="9.5 4 12 7 9.5 10" />
-    </svg>
   );
 }
 
@@ -383,7 +367,7 @@ function ResetButton({ onReset }: { onReset: () => void }) {
       onClick={onReset}
       className="group flex items-center gap-1.5 rounded-lg border border-border/60 bg-card/40 px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/[0.06] hover:text-destructive"
     >
-      <RotateCcw className="h-3 w-3 transition-transform group-hover:-rotate-45" />
+      <ArrowCounterClockwise className="h-3 w-3 transition-transform group-hover:-rotate-45" />
       恢复默认设置
     </button>
   );

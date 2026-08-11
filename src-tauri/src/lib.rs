@@ -57,6 +57,12 @@ fn app_info() -> AppInfo {
                 category: "stock",
                 enabled: true,
             },
+            InstrumentSummary {
+                id: "portfolio",
+                name: "持仓研究",
+                category: "research",
+                enabled: true,
+            },
         ],
     }
 }
