@@ -75,7 +75,7 @@ export function HomePage() {
   const [chartOpen, setChartOpen] = useState(false);
   const [chartBars, setChartBars] = useState<DailyBar[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
-  const [range, setRange] = useState<20 | 30>(30);
+  const [range, setRange] = useState<7 | 20 | 30>(30);
 
   const watchedIds = useMemo(
     () =>
@@ -444,8 +444,8 @@ function ChartWorkspace({
   bars: DailyBar[];
   markers: ReturnType<typeof buildBuyTimingMarkers>;
   loading: boolean;
-  range: 20 | 30;
-  onRangeChange: (range: 20 | 30) => void;
+  range: 7 | 20 | 30;
+  onRangeChange: (range: 7 | 20 | 30) => void;
   onExpand: () => void;
 }) {
   const meta = signalMeta[recommendation.signal];
@@ -496,7 +496,7 @@ function ChartWorkspace({
             </div>
           </div>
           <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-            {([20, 30] as const).map((value) => (
+            {([7, 20, 30] as const).map((value) => (
               <button
                 key={value}
                 type="button"

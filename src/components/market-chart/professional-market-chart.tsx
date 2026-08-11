@@ -1,19 +1,20 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  CandlestickSeries,
-  ColorType,
-  CrosshairMode,
-  HistogramSeries,
-  LineSeries,
-  createChart,
-  createSeriesMarkers,
-  type IChartApi,
-  type Time,
-} from "lightweight-charts";
-import { movingAverageSeries, type BuyTimingMarker } from "@/quant/buy-timing";
+  init,
+  dispose,
+  registerLocale,
+  type Chart,
+  type KLineData,
+  type Styles,
+  type DeepPartial,
+} from "klinecharts";
 import type { DailyBar } from "@/quant/types";
+import type { BuyTimingMarker } from "@/quant/buy-timing";
 
+/* ------------------------------------------------------------------ */
+/*  Types                                                             */
+/* ------------------------------------------------------------------ */
 interface ProfessionalMarketChartProps {
   bars: DailyBar[];
   markers?: BuyTimingMarker[];
@@ -21,247 +22,398 @@ interface ProfessionalMarketChartProps {
   className?: string;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Palette                                                           */
+/* ------------------------------------------------------------------ */
+interface ChartPalette {
+  background: string;
+  text: string;
+  grid: string;
+  border: string;
+  up: string;
+  down: string;
+  primary: string;
+  secondary: string;
+}
+
+const darkPalette: ChartPalette = {
+  background: "#0b1018",
+  text: "#8b95a5",
+  grid: "rgba(95,105,125,0.12)",
+  border: "rgba(95,105,125,0.22)",
+  up: "#26a69a",
+  down: "#ef5350",
+  primary: "#5c8df7",
+  secondary: "#8b95a5",
+};
+
+const lightPalette: ChartPalette = {
+  background: "#f8f9fb",
+  text: "#697586",
+  grid: "rgba(71,85,105,0.10)",
+  border: "rgba(71,85,105,0.18)",
+  up: "#16a34a",
+  down: "#dc2626",
+  primary: "#3b66f0",
+  secondary: "#8490a0",
+};
+
+/* ------------------------------------------------------------------ */
+/*  Locale                                                            */
+/* ------------------------------------------------------------------ */
+registerLocale("zh-CN", {
+  time: "时间",
+  open: "开",
+  high: "高",
+  low: "低",
+  close: "收",
+  volume: "量",
+  change: "幅",
+  turnover: "额",
+  second: "秒",
+  minute: "分",
+  hour: "时",
+  day: "日",
+  week: "周",
+  month: "月",
+  year: "年",
+});
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                           */
+/* ------------------------------------------------------------------ */
+function toTimestamp(dateStr: string): number {
+  return new Date(dateStr + "T00:00:00+08:00").getTime();
+}
+
+function barsToKLineData(bars: DailyBar[]): KLineData[] {
+  return bars.map((bar) => ({
+    timestamp: toTimestamp(bar.tradeDate),
+    open: bar.open,
+    high: bar.high,
+    low: bar.low,
+    close: bar.close,
+    volume: bar.volume,
+  }));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Styles factory                                                    */
+/* ------------------------------------------------------------------ */
+function buildStyles(palette: ChartPalette): DeepPartial<Styles> {
+  return {
+    grid: {
+      show: true,
+      horizontal: { show: true, size: 1, color: palette.grid, style: "dashed", dashedValue: [4, 4] },
+      vertical: { show: false, size: 1, color: palette.grid, style: "solid", dashedValue: [0, 0] },
+    },
+    candle: {
+      type: "candle_solid",
+      bar: {
+        compareRule: "current_open",
+        upColor: palette.up,
+        downColor: palette.down,
+        noChangeColor: palette.secondary,
+        upBorderColor: palette.up,
+        downBorderColor: palette.down,
+        noChangeBorderColor: palette.secondary,
+        upWickColor: palette.up,
+        downWickColor: palette.down,
+        noChangeWickColor: palette.secondary,
+      },
+      priceMark: {
+        show: true,
+        high: { show: false, color: "", textOffset: 0, textSize: 0, textFamily: "", textWeight: "" },
+        low: { show: false, color: "", textOffset: 0, textSize: 0, textFamily: "", textWeight: "" },
+        last: {
+          show: true,
+          compareRule: "current_open",
+          upColor: palette.up,
+          downColor: palette.down,
+          noChangeColor: palette.secondary,
+          line: { show: true, size: 1, color: palette.text, dashedValue: [2, 4] } as any,
+          text: {
+            show: true,
+            color: palette.text,
+            size: 11,
+            family: '"Geist Mono Variable", monospace',
+            weight: "500",
+            paddingLeft: 6,
+            paddingTop: 2,
+            paddingRight: 6,
+            paddingBottom: 2,
+            borderRadius: 3,
+          } as any,
+          extendTexts: [],
+        },
+      },
+      tooltip: {
+        showRule: "follow_cross",
+        showType: "standard",
+        offsetLeft: 8,
+        offsetTop: 8,
+        features: [],
+        title: {
+          show: true,
+          template: "{time}",
+          color: palette.text,
+          size: 11,
+          family: '"Geist Mono Variable", monospace',
+          weight: "500",
+          marginLeft: 10,
+          marginTop: 6,
+          marginRight: 10,
+          marginBottom: 2,
+        } as any,
+        legend: {
+          defaultValue: "--",
+          color: palette.text,
+          size: 10,
+          family: '"Geist Mono Variable", monospace',
+          weight: "400",
+          marginLeft: 10,
+          marginTop: 0,
+          marginRight: 10,
+          marginBottom: 6,
+        } as any,
+      },
+    },
+    indicator: {
+      ohlc: { compareRule: "current_open", upColor: palette.up, downColor: palette.down, noChangeColor: palette.secondary },
+      bars: [],
+      lines: [],
+      circles: [],
+      texts: [],
+      lastValueMark: { show: false, text: { show: false } as any },
+      tooltip: {
+        showRule: "follow_cross",
+        features: [],
+        title: { show: true, showName: true, showParams: true } as any,
+        legend: {
+          defaultValue: "--",
+          color: palette.text,
+          size: 10,
+          family: '"Geist Mono Variable", monospace',
+          weight: "400",
+          marginLeft: 10,
+          marginTop: 0,
+          marginRight: 10,
+          marginBottom: 6,
+        } as any,
+      },
+    },
+    xAxis: {
+      show: true,
+      size: "auto",
+      axisLine: { show: false, color: palette.border, size: 1 },
+      tickLine: { show: false, color: palette.border, length: 4, size: 1 },
+      tickText: {
+        show: true,
+        color: palette.text,
+        size: 10,
+        family: '"Geist Mono Variable", monospace',
+        weight: "400",
+        marginStart: 4,
+        marginEnd: 4,
+      },
+    },
+    yAxis: {
+      show: true,
+      size: "auto",
+      axisLine: { show: false, color: palette.border, size: 1 },
+      tickLine: { show: false, color: palette.border, length: 4, size: 1 },
+      tickText: {
+        show: true,
+        color: palette.text,
+        size: 10,
+        family: '"Geist Mono Variable", monospace',
+        weight: "400",
+        marginStart: 4,
+        marginEnd: 4,
+      },
+    },
+    separator: {
+      size: 1,
+      color: palette.border,
+      fill: true,
+      activeBackgroundColor: "rgba(92,141,247,0.06)",
+    },
+    crosshair: {
+      show: true,
+      horizontal: {
+        show: true,
+        features: [],
+        line: { show: true, style: "dashed", size: 1, color: "rgba(127,139,153,0.35)", dashedValue: [4, 4] },
+        text: {
+          show: true,
+          color: "#ffffff",
+          size: 10,
+          family: '"Geist Mono Variable", monospace',
+          weight: "500",
+          paddingLeft: 6,
+          paddingTop: 2,
+          paddingRight: 6,
+          paddingBottom: 2,
+          borderRadius: 3,
+          backgroundColor: "#354052",
+          borderSize: 0,
+          borderColor: "",
+          borderStyle: "solid",
+          borderDashedValue: [0, 0],
+          style: "stroke_fill",
+        } as any,
+      },
+      vertical: {
+        show: true,
+        line: { show: true, style: "dashed", size: 1, color: "rgba(92,141,247,0.50)", dashedValue: [4, 4] },
+        text: {
+          show: true,
+          color: "#ffffff",
+          size: 10,
+          family: '"Geist Mono Variable", monospace',
+          weight: "500",
+          paddingLeft: 6,
+          paddingTop: 2,
+          paddingRight: 6,
+          paddingBottom: 2,
+          borderRadius: 3,
+          backgroundColor: palette.primary,
+          borderSize: 0,
+          borderColor: "",
+          borderStyle: "solid",
+          borderDashedValue: [0, 0],
+          style: "stroke_fill",
+        } as any,
+      },
+    },
+  } as DeepPartial<Styles>;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Legend bar                                                        */
+/* ------------------------------------------------------------------ */
+function LegendBar({ bars }: { bars: DailyBar[] }) {
+  const latest = bars.at(-1);
+  if (!latest) return null;
+  const change = ((latest.close - latest.open) / latest.open) * 100;
+  const up = change >= 0;
+  const changeColor = up ? "#22c58b" : "#ef5350";
+
+  return (
+    <div className="flex h-9 items-center gap-3 overflow-hidden border-b border-border/70 bg-background-elevated/75 px-3 font-mono text-[10px] text-foreground-subtle [&_strong]:font-medium [&_strong]:text-foreground">
+      <span>{latest.tradeDate}</span>
+      <span>开 <strong>{latest.open.toFixed(3)}</strong></span>
+      <span>高 <strong>{latest.high.toFixed(3)}</strong></span>
+      <span>低 <strong>{latest.low.toFixed(3)}</strong></span>
+      <span>收 <strong>{latest.close.toFixed(3)}</strong></span>
+      <span style={{ color: changeColor }}>{up ? "+" : ""}{change.toFixed(2)}%</span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Component                                                         */
+/* ------------------------------------------------------------------ */
 export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
   bars,
-  markers = [],
   height = 430,
   className,
 }: ProfessionalMarketChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const legendRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<Chart | null>(null);
+  const [mode, setMode] = useState(() =>
+    document.documentElement.classList.contains("dark") ? "dark" : "light",
+  );
 
   const sortedBars = useMemo(
     () => [...bars].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate)),
     [bars],
   );
+  const klineData = useMemo(() => barsToKLineData(sortedBars), [sortedBars]);
 
+  // Calculate optimal barSpace to fill the container
+  const barCount = sortedBars.length;
+
+  // Listen for dark mode changes
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const dark = document.documentElement.classList.contains("dark");
+      setMode(dark ? "dark" : "light");
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+
+  // ── Chart lifecycle ──────────────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || sortedBars.length === 0) return;
+    if (!container || klineData.length === 0) return;
 
-    const dark = document.documentElement.classList.contains("dark");
-    const palette = dark
-      ? {
-          background: "#0e131b",
-          text: "#7f8b99",
-          grid: "rgba(124, 139, 157, 0.10)",
-          border: "rgba(124, 139, 157, 0.18)",
-          up: "#36b77a",
-          down: "#df6270",
-          primary: "#4f8df7",
-          secondary: "#8490a0",
-        }
-      : {
-          background: "#fbfcfd",
-          text: "#697586",
-          grid: "rgba(71, 85, 105, 0.10)",
-          border: "rgba(71, 85, 105, 0.16)",
-          up: "#198754",
-          down: "#c43b50",
-          primary: "#2563d9",
-          secondary: "#64748b",
-        };
+    // Dispose previous instance
+    if (chartRef.current) {
+      try { dispose(container); } catch { /* ok */ }
+    }
 
-    const chart = createChart(container, {
-      width: container.clientWidth,
-      height,
+    const palette = mode === "dark" ? darkPalette : lightPalette;
+
+    // Compute barSpace so that barCount * barSpace ≈ container width - yAxis width
+    const yAxisReserve = 68;
+    const targetSpace = Math.max(4, Math.min(30, (container.clientWidth - yAxisReserve) / (barCount + 1)));
+
+    const chart = init(container, {
+      locale: "zh-CN",
+      timezone: "Asia/Shanghai",
+      styles: buildStyles(palette),
       layout: {
-        background: { type: ColorType.Solid, color: palette.background },
-        textColor: palette.text,
-        fontFamily: '"Geist Mono Variable", monospace',
-        fontSize: 11,
-        attributionLogo: false,
-      },
-      grid: {
-        vertLines: { color: palette.grid },
-        horzLines: { color: palette.grid },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-        vertLine: {
-          color: "rgba(79, 141, 247, 0.48)",
-          width: 1,
-          style: 2,
-          labelBackgroundColor: palette.primary,
+        barSpaceLimit: { min: 4, max: 30 },
+        pane: { minHeight: 60, dragEnabled: true },
+        yAxis: {
+          position: "right",
+          inside: false,
+          reverse: false,
+          scrollZoomEnabled: true,
+          gap: { top: 0.12, bottom: 0.25 },
+          needWidget: true,
         },
-        horzLine: {
-          color: "rgba(127, 139, 153, 0.32)",
-          width: 1,
-          style: 2,
-          labelBackgroundColor: "#354052",
-        },
-      },
-      rightPriceScale: {
-        borderColor: palette.border,
-        scaleMargins: { top: 0.08, bottom: 0.27 },
-        minimumWidth: 72,
-      },
-      timeScale: {
-        borderColor: palette.border,
-        timeVisible: false,
-        rightOffset: 2,
-        barSpacing: Math.max(9, Math.min(18, 720 / sortedBars.length)),
-        minBarSpacing: 5,
-        fixLeftEdge: true,
-      },
-      handleScale: {
-        axisPressedMouseMove: true,
-        mouseWheel: true,
-        pinch: true,
-      },
-      handleScroll: {
-        mouseWheel: true,
-        pressedMouseMove: true,
-        horzTouchDrag: true,
-        vertTouchDrag: false,
-      },
-      localization: {
-        locale: "zh-CN",
-        priceFormatter: (price: number) =>
-          price.toFixed(price > 100 ? 2 : 3),
       },
     });
+
+    if (!chart) return;
     chartRef.current = chart;
 
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: palette.up,
-      downColor: palette.down,
-      borderUpColor: palette.up,
-      borderDownColor: palette.down,
-      wickUpColor: palette.up,
-      wickDownColor: palette.down,
-      priceLineVisible: true,
-      lastValueVisible: true,
+    // Configure symbol and period
+    chart.setSymbol({
+      ticker: bars[0]?.instrumentId ?? "instrument",
+      pricePrecision: 3,
+      volumePrecision: 0,
     });
-    candleSeries.setData(
-      sortedBars.map((bar) => ({
-        time: bar.tradeDate as Time,
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-      })),
-    );
+    chart.setPeriod({ span: 1, type: "day" });
 
-    const volumeSeries = chart.addSeries(HistogramSeries, {
-      priceFormat: { type: "volume" },
-      priceScaleId: "volume",
-      lastValueVisible: false,
-      priceLineVisible: false,
-    });
-    volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.78, bottom: 0 },
-    });
-    volumeSeries.setData(
-      sortedBars.map((bar) => ({
-        time: bar.tradeDate as Time,
-        value: bar.volume,
-        color:
-          bar.close >= bar.open
-            ? dark
-              ? "rgba(54, 183, 122, 0.30)"
-              : "rgba(25, 135, 84, 0.25)"
-            : dark
-              ? "rgba(223, 98, 112, 0.30)"
-              : "rgba(196, 59, 80, 0.25)",
-      })),
-    );
-
-    const ma5Series = chart.addSeries(LineSeries, {
-      color: palette.primary,
-      lineWidth: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    });
-    const ma20Series = chart.addSeries(LineSeries, {
-      color: palette.secondary,
-      lineWidth: 1,
-      lineStyle: 2,
-      priceLineVisible: false,
-      lastValueVisible: false,
-      crosshairMarkerVisible: false,
-    });
-    const ma5 = movingAverageSeries(sortedBars, 5);
-    const ma20 = movingAverageSeries(sortedBars, 20);
-    ma5Series.setData(
-      sortedBars.flatMap((bar, index) =>
-        ma5[index] === null
-          ? []
-          : [{ time: bar.tradeDate as Time, value: ma5[index]! }],
-      ),
-    );
-    ma20Series.setData(
-      sortedBars.flatMap((bar, index) =>
-        ma20[index] === null
-          ? []
-          : [{ time: bar.tradeDate as Time, value: ma20[index]! }],
-      ),
-    );
-
-    createSeriesMarkers(
-      candleSeries,
-      markers.map((marker) => ({
-        time: marker.tradeDate as Time,
-        position: "belowBar" as const,
-        color: palette.up,
-        shape: "arrowUp" as const,
-        text: marker.label,
-        size: 1.2,
-      })),
-    );
-
-    const latest = sortedBars.at(-1)!;
-    const renderLegend = (bar = latest) => {
-      if (!legendRef.current) return;
-      const change = ((bar.close - bar.open) / bar.open) * 100;
-      legendRef.current.innerHTML = [
-        `<span>${bar.tradeDate}</span>`,
-        `<span>开 <strong>${bar.open.toFixed(3)}</strong></span>`,
-        `<span>高 <strong>${bar.high.toFixed(3)}</strong></span>`,
-        `<span>低 <strong>${bar.low.toFixed(3)}</strong></span>`,
-        `<span>收 <strong>${bar.close.toFixed(3)}</strong></span>`,
-        `<span style="color:${change >= 0 ? palette.up : palette.down}">${change >= 0 ? "+" : ""}${change.toFixed(2)}%</span>`,
-      ].join("");
-    };
-    renderLegend();
-    chart.subscribeCrosshairMove((param) => {
-      if (!param.time) {
-        renderLegend();
-        return;
-      }
-      const data = param.seriesData.get(candleSeries);
-      if (data && "open" in data) {
-        const date =
-          typeof param.time === "string"
-            ? param.time
-            : typeof param.time === "number"
-              ? new Date(param.time * 1000).toISOString().slice(0, 10)
-              : `${param.time.year}-${String(param.time.month).padStart(2, "0")}-${String(param.time.day).padStart(2, "0")}`;
-        renderLegend({
-          ...latest,
-          tradeDate: date,
-          open: data.open,
-          high: data.high,
-          low: data.low,
-          close: data.close,
-        });
-      }
+    // Static data — no pagination
+    chart.setDataLoader({
+      getBars: ({ callback }) => {
+        callback(klineData, false);
+      },
     });
 
-    chart.timeScale().fitContent();
-    const resizeObserver = new ResizeObserver(([entry]) => {
-      chart.applyOptions({ width: entry.contentRect.width });
-    });
-    resizeObserver.observe(container);
+    // Set barSpace explicitly after data is loaded (override layout auto)
+    chart.setBarSpace(targetSpace);
+
+    // Indicators
+    chart.createIndicator({ name: "MA", calcParams: [5], paneId: "candle_pane" });
+    chart.createIndicator({ name: "MA", calcParams: [20], paneId: "candle_pane" });
+    chart.createIndicator("VOL");
+
+    // Resize handling
+    const ro = new ResizeObserver(() => chart.resize());
+    ro.observe(container);
 
     return () => {
-      resizeObserver.disconnect();
-      chart.remove();
+      ro.disconnect();
+      dispose(container);
       chartRef.current = null;
     };
-  }, [height, markers, sortedBars]);
+  }, [klineData, mode, bars, height, barCount]);
 
   return (
     <motion.div
@@ -270,10 +422,7 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
       transition={{ type: "spring", stiffness: 110, damping: 20 }}
       className={className}
     >
-      <div
-        ref={legendRef}
-        className="flex h-9 items-center gap-3 overflow-hidden border-b border-border/70 bg-background-elevated/75 px-3 font-mono text-[10px] text-foreground-subtle [&_strong]:font-medium [&_strong]:text-foreground"
-      />
+      <LegendBar bars={sortedBars} />
       <div ref={containerRef} className="w-full" style={{ height }} />
     </motion.div>
   );

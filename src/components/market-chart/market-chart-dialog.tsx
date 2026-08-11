@@ -43,7 +43,7 @@ export function MarketChartDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [bars, setBars] = useState<DailyBar[]>([]);
-  const [range, setRange] = useState<20 | 30>(30);
+  const [range, setRange] = useState<7 | 20 | 30>(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,7 +123,7 @@ export function MarketChartDialog({
               </Badge>
             )}
             <div className="flex rounded-md border border-border bg-background p-0.5">
-              {([20, 30] as const).map((value) => (
+              {([7, 20, 30] as const).map((value) => (
                 <button
                   key={value}
                   type="button"

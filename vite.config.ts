@@ -23,7 +23,7 @@ export default defineConfig(async () => ({
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("@radix-ui")) return "radix-vendor";
           if (id.includes("framer-motion")) return "motion-vendor";
-          if (id.includes("lightweight-charts")) return "chart-vendor";
+          if (id.includes("klinecharts")) return "chart-vendor";
           if (id.includes("lucide-react") || id.includes("@phosphor-icons")) {
             return "icons-vendor";
           }
