@@ -404,6 +404,12 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
     chart.createIndicator({ name: "MA", calcParams: [20], paneId: "candle_pane" });
     chart.createIndicator("VOL");
 
+    // MACD sub-pane (12, 26, 9)
+    chart.createIndicator({ name: "MACD", calcParams: [12, 26, 9] });
+
+    // KDJ sub-pane (9, 3, 3)
+    chart.createIndicator({ name: "KDJ", calcParams: [9, 3, 3] });
+
     // Resize handling
     const ro = new ResizeObserver(() => chart.resize());
     ro.observe(container);
