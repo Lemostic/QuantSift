@@ -4,6 +4,7 @@ import {
   init,
   dispose,
   registerLocale,
+  registerStyles,
   type Chart,
   type KLineData,
   type Styles,
@@ -79,6 +80,12 @@ registerLocale("zh-CN", {
   month: "月",
   year: "年",
 });
+
+/* ------------------------------------------------------------------ */
+/*  Named styles (registered once globally)                           */
+/* ------------------------------------------------------------------ */
+registerStyles("quantsift-dark", buildStyles(darkPalette));
+registerStyles("quantsift-light", buildStyles(lightPalette));
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
@@ -365,7 +372,7 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
     const chart = init(container, {
       locale: "zh-CN",
       timezone: "Asia/Shanghai",
-      styles: buildStyles(palette),
+      styles: mode === "dark" ? "quantsift-dark" : "quantsift-light",
       layout: {
         barSpaceLimit: { min: 4, max: 30 },
         pane: { minHeight: 60, dragEnabled: true },
@@ -414,6 +421,12 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
 
     // KDJ sub-pane (9, 3, 3)
     chart.createIndicator({ name: "KDJ", calcParams: [9, 3, 3] });
+
+    // RSI (14)
+    chart.createIndicator({ name: "RSI", calcParams: [14] });
+
+    // BOLL (20, 2)
+    chart.createIndicator({ name: "BOLL", calcParams: [20, 2], paneId: "candle_pane" });
 
     // ── Buy-timing signal overlays ────────────────────────────────
     if (markers.length > 0) {
