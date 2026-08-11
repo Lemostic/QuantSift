@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Brain, ChartLineUp, Crosshair, Info, TrendUp } from "@phosphor-icons/react";
-import { recordedMarketDataProvider } from "@/data/recorded-provider";
+import { registry } from "@/data/provider-registry";
 import { buildRecommendation } from "@/quant/recommendation";
 import { buildBuyTimingMarkers } from "@/quant/buy-timing";
 import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
@@ -52,7 +52,8 @@ export function MarketChartDialog({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    void recordedMarketDataProvider
+    void registry
+      .provider("akshare")
       .getDailyBars(instrument.id, 30)
       .then((next) => {
         if (!cancelled) setBars(next);

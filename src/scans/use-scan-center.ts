@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { recordedMarketDataProvider } from "@/data/recorded-provider";
+import { registry } from "@/data/provider-registry";
 import { LocalScanRepository, DEFAULT_SCAN_SCHEDULE } from "./repository";
 import { getDueScan, type ScanSchedule } from "./scheduler";
 import { runWatchlistScan } from "./scan-service";
@@ -31,7 +31,7 @@ async function executeScan(
   announceChange();
   try {
     return await runWatchlistScan({
-      provider: recordedMarketDataProvider,
+      provider: registry.provider("akshare"),
       instrumentIds,
       trigger,
       scheduledWindowId,

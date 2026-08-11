@@ -15,7 +15,7 @@ import {
   Warning,
   Wallet,
 } from "@phosphor-icons/react";
-import { recordedMarketDataProvider } from "@/data/recorded-provider";
+import { registry } from "@/data/provider-registry";
 import { loadRecommendations } from "@/data/recommendation-service";
 import type { Instrument, Recommendation } from "@/quant/types";
 import { usePortfolio } from "@/portfolio/use-portfolio";
@@ -94,8 +94,8 @@ export function PortfolioPage() {
     let cancelled = false;
     setMarketLoading(true);
     Promise.all([
-      recordedMarketDataProvider.listInstruments(),
-      loadRecommendations(recordedMarketDataProvider),
+      registry.provider("akshare").listInstruments(),
+      loadRecommendations(registry.provider("akshare")),
     ])
       .then(([instruments, next]) => {
         if (cancelled) return;

@@ -18,8 +18,8 @@ import {
   TrendUp,
   Warning,
 } from "@phosphor-icons/react";
-import { loadRecommendations } from "@/data/recommendation-service";
-import { recordedMarketDataProvider } from "@/data/recorded-provider";
+import { loadWithFallback, registry } from "@/data/provider-registry";
+import type { DataSourceId } from "@/data/provider-registry";
 import { summarizeDashboard } from "@/dashboard/summary";
 import { buildBuyTimingMarkers } from "@/quant/buy-timing";
 import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
@@ -69,6 +69,8 @@ export function HomePage() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<DataSourceId>("akshare");
+  const [fellBack, setFellBack] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [chartOpen, setChartOpen] = useState(false);
   const [chartBars, setChartBars] = useState<DailyBar[]>([]);
@@ -88,15 +90,19 @@ export function HomePage() {
     setLoading(true);
     setError(null);
     try {
-      const next = await loadRecommendations(
-        recordedMarketDataProvider,
-        watchedIds,
-      );
-      setRecommendations(next);
+      const result = await loadWithFallback(watchedIds, "akshare");
+      setRecommendations(result.recommendations);
+      setDataSource(result.source);
+      setFellBack(result.fellBack);
+      // A network failure that triggers the offline fallback is surfaced as a
+      // non-fatal notice (the dashboard still renders with fixture data).
+      if (result.fellBack && result.error) {
+        setError(null);
+      }
       setSelectedId((current) =>
-        next.some((item) => item.instrument.id === current)
+        result.recommendations.some((item) => item.instrument.id === current)
           ? current
-          : (next[0]?.instrument.id ?? null),
+          : (result.recommendations[0]?.instrument.id ?? null),
       );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
@@ -132,7 +138,8 @@ export function HomePage() {
     }
     let cancelled = false;
     setChartLoading(true);
-    void recordedMarketDataProvider
+    void registry
+      .provider(dataSource)
       .getDailyBars(selected.instrument.id, 30)
       .then((bars) => {
         if (!cancelled) setChartBars(bars);
@@ -148,7 +155,7 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [selected?.instrument.id]);
+  }, [selected?.instrument.id, dataSource]);
 
   const visibleBars = chartBars.slice(-range);
   const markers = useMemo(() => buildBuyTimingMarkers(chartBars), [chartBars]);
@@ -177,6 +184,8 @@ export function HomePage() {
       <DashboardHeader
         loading={loading || scans.running}
         latestRun={scans.runs[0] ?? null}
+        dataSource={dataSource}
+        fellBack={fellBack}
         onRefresh={() => void runManualScan()}
       />
 
@@ -193,7 +202,25 @@ export function HomePage() {
         <>
           <MetricStrip summary={summary} />
 
-          {summary.freshness.state === "stale" && (
+          {fellBack && (
+            <div className="flex items-start justify-between gap-4 border-l-2 border-accent-amber bg-accent-amber/[0.05] px-3 py-2.5 sm:items-center sm:px-4">
+              <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
+                <Warning
+                  size={16}
+                  weight="fill"
+                  className="mt-0.5 shrink-0 text-accent-amber sm:mt-0"
+                />
+                <p className="text-[11px] leading-4 text-foreground-muted sm:text-xs">
+                  AKShare 数据源暂不可用，已回退到离线样例行情。显示的数据用于验证研究流程，不构成交易依据。
+                </p>
+              </div>
+              <Badge variant="outline" className="hidden shrink-0 font-mono text-[9px] sm:inline-flex">
+                FALLBACK
+              </Badge>
+            </div>
+          )}
+
+          {!fellBack && summary.freshness.state === "stale" && (
             <div className="flex items-start justify-between gap-4 border-l-2 border-accent-amber bg-accent-amber/[0.05] px-3 py-2.5 sm:items-center sm:px-4">
               <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
                 <Warning
@@ -257,17 +284,31 @@ export function HomePage() {
 function DashboardHeader({
   loading,
   latestRun,
+  dataSource,
+  fellBack,
   onRefresh,
 }: {
   loading: boolean;
   latestRun: ScanRun | null;
+  dataSource: DataSourceId;
+  fellBack: boolean;
   onRefresh: () => void;
 }) {
+  const sourceLabel =
+    dataSource === "akshare" ? "AKSHARE" : "RECORDED FIXTURE";
   return (
     <header className="flex flex-col gap-3 border-b border-border/70 pb-3 sm:flex-row sm:items-end sm:justify-between sm:pb-4">
       <div className="min-w-0">
         <div className="flex items-center gap-2 font-mono text-[9px] font-semibold text-primary">
-          <span>MARKET MONITOR</span>
+          <span className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "inline-block h-1.5 w-1.5 rounded-full",
+                fellBack ? "bg-accent-amber" : "bg-accent-emerald",
+              )}
+            />
+            MARKET MONITOR
+          </span>
           <span className="text-foreground-subtle">/</span>
           <span className="text-foreground-muted">DAILY RESEARCH</span>
         </div>
@@ -289,7 +330,7 @@ function DashboardHeader({
                   hour: "2-digit",
                   minute: "2-digit",
                 })
-              : "RECORDED FIXTURE"}
+              : sourceLabel}
           </div>
         </div>
         <Button

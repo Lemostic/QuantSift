@@ -13,7 +13,7 @@ import {
   Trash,
   Warning,
 } from "@phosphor-icons/react";
-import { recordedMarketDataProvider } from "@/data/recorded-provider";
+import { registry } from "@/data/provider-registry";
 import { loadRecommendations } from "@/data/recommendation-service";
 import type {
   Instrument,
@@ -57,7 +57,7 @@ export function WatchlistPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    void recordedMarketDataProvider.listInstruments().then(setCatalog);
+    void registry.provider("akshare").listInstruments().then(setCatalog);
   }, []);
 
   const entryIds = useMemo(
@@ -86,7 +86,7 @@ export function WatchlistPage() {
       return;
     }
     let cancelled = false;
-    void loadRecommendations(recordedMarketDataProvider, [...entryIds])
+    void loadRecommendations(registry.provider("akshare"), [...entryIds])
       .then((next) => {
         if (!cancelled) setRecommendations(next);
       })
