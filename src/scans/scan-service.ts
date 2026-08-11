@@ -1,6 +1,7 @@
 import type { MarketDataProvider } from "@/data/market-data-provider";
 import { loadRecommendations } from "@/data/recommendation-service";
 import type { ScanRun, ScanTrigger } from "./types";
+import type { Recommendation } from "@/quant/types";
 
 export interface ScanHistoryStore {
   saveRun(run: ScanRun): Promise<void>;
@@ -14,6 +15,10 @@ export interface RunWatchlistScanRequest {
   store: ScanHistoryStore;
   now?: () => Date;
   createId?: () => string;
+  afterCompleted?: (
+    run: ScanRun,
+    recommendations: Recommendation[],
+  ) => Promise<void>;
 }
 
 export async function runWatchlistScan({
@@ -24,6 +29,7 @@ export async function runWatchlistScan({
   store,
   now = () => new Date(),
   createId = () => crypto.randomUUID(),
+  afterCompleted,
 }: RunWatchlistScanRequest): Promise<ScanRun> {
   const startedAt = now().toISOString();
   const running: ScanRun = {
@@ -54,6 +60,7 @@ export async function runWatchlistScan({
       avoidCount: recommendations.filter((item) => item.signal === "avoid").length,
     };
     await store.saveRun(completed);
+    await afterCompleted?.(completed, recommendations);
     return completed;
   } catch (cause) {
     const failed: ScanRun = {
@@ -66,4 +73,3 @@ export async function runWatchlistScan({
     throw cause;
   }
 }
-

@@ -116,6 +116,8 @@ Constraint:
 
 ## Slice 4: Scheduled SMS Alerts
 
+Status: implemented with simulation and generic HTTPS Webhook modes.
+
 Goal: notify the owner when a scheduled scan produces actionable signals.
 
 Deliverables:

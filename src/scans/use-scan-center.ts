@@ -4,6 +4,11 @@ import { LocalScanRepository, DEFAULT_SCAN_SCHEDULE } from "./repository";
 import { getDueScan, type ScanSchedule } from "./scheduler";
 import { runWatchlistScan } from "./scan-service";
 import type { ScanRun, ScanTrigger } from "./types";
+import { processScanAlerts } from "@/alerts/alert-service";
+import {
+  announceAlertChange,
+  getAlertRepository,
+} from "@/alerts/use-alert-center";
 
 const SCANS_CHANGED_EVENT = "quantsift:scans-changed";
 let browserRepository: LocalScanRepository | null = null;
@@ -35,6 +40,23 @@ async function executeScan(
       trigger,
       scheduledWindowId,
       store: getRepository(),
+      afterCompleted: async (run, recommendations) => {
+        try {
+          const alertRepository = getAlertRepository();
+          const policy = await alertRepository.getPolicy();
+          await processScanAlerts({
+            scanId: run.id,
+            recommendations,
+            policy,
+            repository: alertRepository,
+          });
+        } catch (cause) {
+          // A notification configuration error must not invalidate a completed scan.
+          console.error("QuantSift alert processing failed", cause);
+        } finally {
+          announceAlertChange();
+        }
+      },
     });
   } finally {
     scanInFlight = false;
@@ -121,4 +143,3 @@ export function useAutomaticScan(instrumentIds: string[]) {
     };
   }, [instrumentIdsKey]);
 }
-

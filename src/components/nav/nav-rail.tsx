@@ -4,6 +4,7 @@ import {
   Home,
   LineChart,
   CalendarClock,
+  BellRing,
   type LucideIcon,
   Settings as SettingsIcon,
   Sparkles,
@@ -33,6 +34,7 @@ const TOOL_NAV: NavItem[] = [
   { to: "/", label: "推荐总览", icon: LineChart },
   { to: "/watchlist", label: "我的观察列表", icon: WalletCards },
   { to: "/scans", label: "自动扫描", icon: CalendarClock },
+  { to: "/alerts", label: "短信提醒", icon: BellRing },
 ];
 
 const SYSTEM_NAV: NavItem[] = [
