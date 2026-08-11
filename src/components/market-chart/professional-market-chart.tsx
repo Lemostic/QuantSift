@@ -11,6 +11,7 @@ import {
 } from "klinecharts";
 import type { DailyBar } from "@/quant/types";
 import type { BuyTimingMarker } from "@/quant/buy-timing";
+import { buildBuyTimingMarkers } from "@/quant/buy-timing";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -316,6 +317,7 @@ function LegendBar({ bars }: { bars: DailyBar[] }) {
 /* ------------------------------------------------------------------ */
 export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
   bars,
+  markers: externalMarkers,
   height = 430,
   className,
 }: ProfessionalMarketChartProps) {
@@ -396,6 +398,9 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
       },
     });
 
+    // Use external markers or compute from bars
+    const markers = externalMarkers ?? buildBuyTimingMarkers(sortedBars);
+
     // Set barSpace explicitly after data is loaded (override layout auto)
     chart.setBarSpace(targetSpace);
 
@@ -409,6 +414,34 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
 
     // KDJ sub-pane (9, 3, 3)
     chart.createIndicator({ name: "KDJ", calcParams: [9, 3, 3] });
+
+    // ── Buy-timing signal overlays ────────────────────────────────
+    if (markers.length > 0) {
+      for (const marker of markers) {
+        const ts = toTimestamp(marker.tradeDate);
+        // Use simpleAnnotation — an upward-pointing arrow + text above price
+        chart.createOverlay({
+          name: "simpleAnnotation",
+          groupId: "buy_signals",
+          paneId: "candle_pane",
+          points: [{ timestamp: ts }],
+          extendData: marker.label,
+          styles: {
+            polygon: {
+              color: marker.kind === "trend_breakout" ? "#22c58b" : palette.primary,
+              borderColor: marker.kind === "trend_breakout" ? "#22c58b" : palette.primary,
+              borderSize: 1,
+              style: "fill",
+            },
+            line: {
+              color: marker.kind === "trend_breakout" ? "rgba(34,197,139,0.7)" : `rgba(92,141,247,0.6)`,
+              style: "dashed",
+              size: 1,
+            },
+          } as any,
+        });
+      }
+    }
 
     // Resize handling
     const ro = new ResizeObserver(() => chart.resize());
