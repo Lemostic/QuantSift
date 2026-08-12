@@ -13,7 +13,7 @@ import {
   Trash,
   Warning,
 } from "@phosphor-icons/react";
-import { registry } from "@/data/provider-registry";
+import { configuredProvider } from "@/data/provider-registry";
 import { loadRecommendations } from "@/data/recommendation-service";
 import type {
   Instrument,
@@ -57,7 +57,9 @@ export function WatchlistPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    void registry.provider("akshare").listInstruments().then(setCatalog);
+    void configuredProvider().listInstruments().then(setCatalog).catch((cause) => {
+      setActionError(cause instanceof Error ? cause.message : String(cause));
+    });
   }, []);
 
   const entryIds = useMemo(
@@ -86,7 +88,7 @@ export function WatchlistPage() {
       return;
     }
     let cancelled = false;
-    void loadRecommendations(registry.provider("akshare"), [...entryIds])
+    void loadRecommendations(configuredProvider(), [...entryIds])
       .then((next) => {
         if (!cancelled) setRecommendations(next);
       })

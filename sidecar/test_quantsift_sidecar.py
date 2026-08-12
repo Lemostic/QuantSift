@@ -78,6 +78,23 @@ def _bars_to_stock_frame(bars):
     )
 
 
+def _bars_to_sina_frame(bars):
+    import pandas as pd
+    return pd.DataFrame(
+        [
+            {
+                "date": pd.to_datetime(bar["tradeDate"]).date(),
+                "open": bar["open"],
+                "close": bar["close"],
+                "high": bar["high"],
+                "low": bar["low"],
+                "volume": bar["volume"],
+            }
+            for bar in bars
+        ]
+    )
+
+
 def _bars_to_nav_frame(bars):
     import pandas as pd
     return pd.DataFrame(
@@ -144,6 +161,25 @@ def test_get_daily_bars_otc_fund_normalized(fake_ak):
     assert last["open"] == last["close"] == last["high"] == last["low"]
 
 
+def test_etf_uses_sina_when_eastmoney_is_unreachable(monkeypatch):
+    bars = load_fixture("bars_CN_600519")["result"]
+
+    class FakeAkshare:
+        def fund_etf_hist_em(self, **kwargs):
+            raise ConnectionError("RemoteDisconnected")
+
+        def stock_zh_a_daily(self, **kwargs):
+            assert kwargs["symbol"] == "sh510300"
+            return _bars_to_sina_frame(bars)
+
+    monkeypatch.setattr(sc, "_AK", FakeAkshare())
+    result = sc.get_daily_bars("CN:510300", 5)
+
+    assert len(result) == 5
+    assert result[-1]["instrumentId"] == "CN:510300"
+    assert result[-1]["provider"] == "akshare"
+
+
 def test_weekend_rows_are_excluded(fake_ak):
     bars = sc.get_daily_bars("CN:600519", 30)
     dates = {bar["tradeDate"] for bar in bars}
@@ -177,6 +213,16 @@ def test_handle_unknown_method():
     with pytest.raises(sc.RpcError) as exc:
         sc._handle("nope", {})
     assert exc.value.code == "method_not_found"
+
+
+def test_malformed_json_returns_error_without_crashing(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "stdin", iter(["not-json\n"]))
+
+    assert sc.main() == 0
+    response = json.loads(capsys.readouterr().out)
+    assert response["id"] is None
+    assert response["ok"] is False
+    assert response["error"]["code"] == "data_error"
 
 
 def test_handle_known_methods(fake_ak):

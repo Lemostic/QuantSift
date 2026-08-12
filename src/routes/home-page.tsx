@@ -18,7 +18,7 @@ import {
   TrendUp,
   Warning,
 } from "@phosphor-icons/react";
-import { loadWithFallback, registry } from "@/data/provider-registry";
+import { loadConfiguredMarketData, registry } from "@/data/provider-registry";
 import type { DataSourceId } from "@/data/provider-registry";
 import { summarizeDashboard } from "@/dashboard/summary";
 import { buildBuyTimingMarkers } from "@/quant/buy-timing";
@@ -38,6 +38,7 @@ import { Badge } from "@/components/ui/badge";
 import { PAGE_CONTAINER_CLASS } from "@/lib/spacing";
 import { MarketChartDialog } from "@/components/market-chart/market-chart-dialog";
 import { ProfessionalMarketChart } from "@/components/market-chart/professional-market-chart";
+import { useAppStore } from "@/store/app-store";
 
 const signalMeta: Record<
   RecommendationSignal,
@@ -66,6 +67,10 @@ const signalMeta: Record<
 export function HomePage() {
   const watchlist = useWatchlist();
   const scans = useScanCenter();
+  const preferredDataSource = useAppStore((state) => state.marketDataSource);
+  const allowOfflineFallback = useAppStore(
+    (state) => state.allowOfflineFallback,
+  );
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +95,7 @@ export function HomePage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await loadWithFallback(watchedIds, "akshare");
+      const result = await loadConfiguredMarketData(watchedIds);
       setRecommendations(result.recommendations);
       setDataSource(result.source);
       setFellBack(result.fellBack);
@@ -98,6 +103,8 @@ export function HomePage() {
       // non-fatal notice (the dashboard still renders with fixture data).
       if (result.fellBack && result.error) {
         setError(null);
+      } else if (result.error) {
+        setError(result.error);
       }
       setSelectedId((current) =>
         result.recommendations.some((item) => item.instrument.id === current)
@@ -118,7 +125,12 @@ export function HomePage() {
 
   useEffect(() => {
     if (watchlist.ready) void refresh();
-  }, [watchlist.ready, watchedIdsKey]);
+  }, [
+    watchlist.ready,
+    watchedIdsKey,
+    preferredDataSource,
+    allowOfflineFallback,
+  ]);
 
   const summary = useMemo(
     () => summarizeDashboard(recommendations),

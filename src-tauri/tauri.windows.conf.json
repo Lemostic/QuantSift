@@ -1,0 +1,10 @@
+{
+  "build": {
+    "beforeBuildCommand": "pnpm build && pnpm build:sidecar"
+  },
+  "bundle": {
+    "externalBin": [
+      "binaries/quantsift-sidecar"
+    ]
+  }
+}

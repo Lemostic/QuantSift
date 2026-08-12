@@ -211,7 +211,7 @@ def _sina_row_to_bar(entry: dict[str, Any], row: dict[str, Any]) -> dict[str, An
     }
 
 
-def _fetch_etf(entry: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+def _fetch_etf_eastmoney(entry: dict[str, Any], limit: int) -> list[dict[str, Any]]:
     """Exchange-traded fund daily bars via fund_etf_hist_em (前复权)."""
     ak = _akshare()
     df = ak.fund_etf_hist_em(
@@ -224,6 +224,36 @@ def _fetch_etf(entry: dict[str, Any], limit: int) -> list[dict[str, Any]]:
     if df is None or df.empty:
         raise ValueError(f"{entry['symbol']} 无行情数据")
     return [_stock_row_to_bar(entry, row) for row in df.tail(limit).to_dict("records")]
+
+
+def _fetch_etf(entry: dict[str, Any], limit: int) -> list[dict[str, Any]]:
+    """Fetch ETF bars, using Sina when Eastmoney is unreachable."""
+    try:
+        return _fetch_etf_eastmoney(entry, limit)
+    except Exception as first_error:  # noqa: BLE001
+        if not _is_network_error(first_error):
+            raise
+
+        ak = _akshare()
+        symbol = entry["symbol"]
+        prefix = "sh" if entry["exchange"] == "SSE" else "sz"
+        try:
+            frame = ak.stock_zh_a_daily(
+                symbol=f"{prefix}{symbol}",
+                start_date="19900101",
+                end_date=_dt.date.today().strftime("%Y%m%d"),
+                adjust="qfq",
+            )
+            if frame is None or frame.empty:
+                raise ValueError(f"No market data for {symbol}")
+            return [
+                _sina_row_to_bar(entry, row)
+                for row in frame.tail(limit).to_dict("records")
+            ]
+        except Exception as fallback_error:  # noqa: BLE001
+            raise ValueError(
+                f"ETF market data unavailable: {fallback_error}"
+            ) from fallback_error
 
 
 def _fetch_otc_fund(entry: dict[str, Any], limit: int) -> list[dict[str, Any]]:
@@ -387,6 +417,7 @@ def main() -> int:
         line = line.strip()
         if not line:
             continue
+        request: dict[str, Any] = {}
         try:
             request = json.loads(line)
             request_id = request.get("id")

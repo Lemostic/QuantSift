@@ -1,11 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createAkShareMarketDataProvider,
   type InvokeFn,
 } from "./akshare-provider";
-import { ProviderRegistry, loadWithFallback } from "./provider-registry";
+import {
+  ProviderRegistry,
+  configuredProvider,
+  loadWithFallback,
+} from "./provider-registry";
 import type { MarketDataProvider } from "./market-data-provider";
 import { recordedMarketDataProvider } from "./recorded-provider";
+import { useAppStore } from "@/store/app-store";
 
 /**
  * The AKShare provider talks to Tauri via `invoke`. These tests inject a fake
@@ -103,6 +108,24 @@ describe("ProviderRegistry", () => {
     const reg = new ProviderRegistry({ akshare: stub });
     expect(reg.provider("akshare").id).toBe("stub");
   });
+
+  it("returns only the provider selected in settings", () => {
+    const previousSource = useAppStore.getState().marketDataSource;
+    const persistWarning = vi.spyOn(console, "error").mockImplementation(() => {});
+    const persistLog = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      useAppStore.getState().setMarketDataSource("recorded");
+      expect(configuredProvider().id).toBe("recorded-fixture");
+
+      useAppStore.getState().setMarketDataSource("akshare");
+      expect(configuredProvider().id).toBe("akshare");
+    } finally {
+      useAppStore.getState().setMarketDataSource(previousSource);
+      persistWarning.mockRestore();
+      persistLog.mockRestore();
+    }
+  });
 });
 
 describe("loadWithFallback", () => {
@@ -120,19 +143,35 @@ describe("loadWithFallback", () => {
       listInstruments: () => Promise.reject(new Error("网络错误: Max retries")),
       getDailyBars: () => Promise.reject(new Error("网络错误: Max retries")),
     };
-    const { registry } = await import("./provider-registry");
-    const originalAkshare = registry.provider("akshare");
     const reg = new ProviderRegistry({ akshare: broken });
-    Object.assign(registry, reg);
 
-    const result = await loadWithFallback(["CN:600519"], "akshare");
+    const result = await loadWithFallback(["CN:600519"], "akshare", true, reg);
     expect(result.source).toBe("recorded");
     expect(result.fellBack).toBe(true);
     expect(result.error).toMatch(/网络/);
     expect(result.recommendations.length).toBeGreaterThan(0);
 
-    // Restore so other tests keep using the real providers.
-    Object.assign(registry, new ProviderRegistry({ akshare: originalAkshare }));
+  });
+
+  it("does not silently use fixtures when fallback is disabled", async () => {
+    const broken: MarketDataProvider = {
+      id: "akshare",
+      listInstruments: () => Promise.reject(new Error("live provider unavailable")),
+      getDailyBars: () => Promise.reject(new Error("live provider unavailable")),
+    };
+    const reg = new ProviderRegistry({ akshare: broken });
+
+    const result = await loadWithFallback(
+      ["CN:600519"],
+      "akshare",
+      false,
+      reg,
+    );
+
+    expect(result.source).toBe("akshare");
+    expect(result.fellBack).toBe(false);
+    expect(result.recommendations).toEqual([]);
+    expect(result.error).toMatch(/live provider unavailable/);
   });
 
   it("returns an error when both sources fail", async () => {
@@ -146,23 +185,13 @@ describe("loadWithFallback", () => {
       listInstruments: () => Promise.reject(new Error("fixture 损坏")),
       getDailyBars: () => Promise.reject(new Error("fixture 损坏")),
     };
-    const { registry } = await import("./provider-registry");
-    const originalAkshare = registry.provider("akshare");
-    const originalRecorded = registry.provider("recorded");
-    Object.assign(
-      registry,
-      new ProviderRegistry({ akshare: broken, recorded: alsoBroken }),
-    );
+    const reg = new ProviderRegistry({ akshare: broken, recorded: alsoBroken });
 
-    const result = await loadWithFallback(["CN:600519"], "akshare");
+    const result = await loadWithFallback(["CN:600519"], "akshare", true, reg);
     expect(result.recommendations).toHaveLength(0);
     expect(result.fellBack).toBe(true);
     expect(result.error).toMatch(/fixture 损坏/);
 
-    Object.assign(
-      registry,
-      new ProviderRegistry({ akshare: originalAkshare, recorded: originalRecorded }),
-    );
   });
 
   it("keeps recorded provider usable directly", async () => {

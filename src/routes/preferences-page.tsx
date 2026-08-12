@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowCounterClockwise,
   ArrowsHorizontal,
   ArrowsVertical,
   Check,
+  Database,
   Palette,
   SlidersHorizontal,
   Sparkle,
+  WifiHigh,
+  Warning,
 } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/app-store";
@@ -21,6 +25,7 @@ import {
   paddingToStyle,
   type PagePadding,
 } from "@/lib/spacing";
+import { registry } from "@/data/provider-registry";
 
 export function PreferencesPage() {
   const contentPadding = useAppStore((s) => s.contentPadding);
@@ -29,6 +34,12 @@ export function PreferencesPage() {
   const resetContentPadding = useAppStore((s) => s.resetContentPadding);
   const setTheme = useAppStore((s) => s.setTheme);
   const recentModules = useAppStore((s) => s.recentModules);
+  const marketDataSource = useAppStore((s) => s.marketDataSource);
+  const allowOfflineFallback = useAppStore((s) => s.allowOfflineFallback);
+  const setMarketDataSource = useAppStore((s) => s.setMarketDataSource);
+  const setAllowOfflineFallback = useAppStore(
+    (s) => s.setAllowOfflineFallback,
+  );
 
   return (
     <div
@@ -48,6 +59,19 @@ export function PreferencesPage() {
       </header>
 
       {/* Live preview — visualises the current vertical/horizontal padding */}
+      <SettingsGroup
+        title="市场数据"
+        description="选择全局行情提供商。首页、观察列表、持仓、扫描和 K 线会使用同一配置。"
+        icon={<Database className="h-4 w-4" />}
+      >
+        <MarketDataSettings
+          source={marketDataSource}
+          allowFallback={allowOfflineFallback}
+          onSourceChange={setMarketDataSource}
+          onFallbackChange={setAllowOfflineFallback}
+        />
+      </SettingsGroup>
+
       <PaddingPreview value={contentPadding} />
 
       {/* Preset row + per-axis sliders */}
@@ -126,6 +150,162 @@ export function PreferencesPage() {
 // ---------------------------------------------------------------------------
 // Live preview
 // ---------------------------------------------------------------------------
+
+function MarketDataSettings({
+  source,
+  allowFallback,
+  onSourceChange,
+  onFallbackChange,
+}: {
+  source: "akshare" | "recorded";
+  allowFallback: boolean;
+  onSourceChange: (source: "akshare" | "recorded") => void;
+  onFallbackChange: (allow: boolean) => void;
+}) {
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
+
+  const testConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const provider = registry.provider(source);
+      const instruments = await provider.listInstruments();
+      await provider.getDailyBars("CN:510300", 1);
+      setTestResult({
+        ok: true,
+        message:
+          source === "akshare"
+            ? `实时数据服务可用，已读取 ${instruments.length} 个标的`
+            : `离线样本可用，包含 ${instruments.length} 个标的`,
+      });
+    } catch (cause) {
+      setTestResult({
+        ok: false,
+        message: cause instanceof Error ? cause.message : String(cause),
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <ProviderOption
+          active={source === "akshare"}
+          icon={<WifiHigh size={18} className="text-primary" />}
+          title="AKShare 实时数据"
+          detail="通过应用内置数据服务读取 A 股、ETF 与公募基金行情，无需 API 密钥。"
+          onClick={() => {
+            onSourceChange("akshare");
+            setTestResult(null);
+          }}
+        />
+        <ProviderOption
+          active={source === "recorded"}
+          warning
+          icon={<Database size={18} className="text-accent-amber" />}
+          title="离线样本"
+          detail="固定录制数据，仅用于演示和测试，不代表当前市场行情。"
+          onClick={() => {
+            onSourceChange("recorded");
+            setTestResult(null);
+          }}
+        />
+      </div>
+
+      <label
+        className={cn(
+          "flex items-center justify-between gap-4 border-y border-border/60 py-3",
+          source === "recorded" && "opacity-50",
+        )}
+      >
+        <span>
+          <span className="block text-xs font-medium">实时源失败时使用离线样本</span>
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+            关闭后会直接显示连接错误，避免把样本数据误认为实时行情。
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={allowFallback}
+          disabled={source === "recorded"}
+          onChange={(event) => onFallbackChange(event.target.checked)}
+          className="h-4 w-4 shrink-0 accent-primary"
+        />
+      </label>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-h-4 text-[11px]">
+          {testResult && (
+            <span
+              className={cn(
+                "flex items-center gap-1.5",
+                testResult.ok ? "text-accent-emerald" : "text-accent-rose",
+              )}
+            >
+              {testResult.ok ? <Check size={13} /> : <Warning size={13} />}
+              {testResult.message}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => void testConnection()}
+          disabled={testing}
+          className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
+        >
+          <WifiHigh size={14} />
+          {testing ? "测试中" : "测试连接"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ProviderOption({
+  active,
+  warning = false,
+  icon,
+  title,
+  detail,
+  onClick,
+}: {
+  active: boolean;
+  warning?: boolean;
+  icon: React.ReactNode;
+  title: string;
+  detail: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "flex min-h-20 items-start gap-3 rounded-md border p-3 text-left transition-colors",
+        active
+          ? warning
+            ? "border-accent-amber/50 bg-accent-amber/[0.05]"
+            : "border-primary/50 bg-primary/[0.06]"
+          : "border-border/60 bg-background/35 hover:border-border",
+      )}
+    >
+      <span className="mt-0.5 shrink-0">{icon}</span>
+      <span>
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="mt-1 block text-[11px] leading-4 text-muted-foreground">
+          {detail}
+        </span>
+      </span>
+    </button>
+  );
+}
 
 function PaddingPreview({ value }: { value: PagePadding }) {
   return (
