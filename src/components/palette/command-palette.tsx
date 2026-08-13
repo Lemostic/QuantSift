@@ -5,6 +5,7 @@ import {
   BellSimpleRinging,
   Briefcase,
   CalendarDots,
+  ChartLine,
   ChartLineUp,
   ArrowBendDownLeft,
   Eraser,
@@ -53,6 +54,14 @@ const COMMANDS: WorkspaceCommand[] = [
     keywords: ["持仓", "成本", "盈亏", "止损", "止盈", "风险"],
     path: "/portfolio",
     icon: Briefcase,
+  },
+  {
+    id: "backtest",
+    name: "回测研究",
+    description: "验证研究信号、退出边界和历史成本",
+    keywords: ["回测", "历史", "策略", "模拟", "回撤"],
+    path: "/backtest",
+    icon: ChartLine,
   },
   {
     id: "scans",

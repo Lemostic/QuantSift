@@ -202,10 +202,44 @@ Acceptance criteria:
 - Incomplete history is rejected instead of producing false confidence.
 - The intelligence panel works for both stocks and funds.
 
+## Slice 7: Deterministic Backtesting
+
+Status: implemented.
+
+Goal: let the owner stress-test the research signals against historical daily
+bars with explicit cost assumptions and look-ahead prevention.
+
+Deliverables:
+
+- Prefix-only signal evaluation so future bars cannot change earlier decisions.
+- Next-open entries after a buy signal and signal-based exits at the open after
+  an avoid signal.
+- Stop-loss, take-profit, maximum-holding and data-end exit boundaries.
+- Commission, minimum commission, stock sell stamp duty, and slippage modeled
+  in every trade.
+- Equity curve, drawdown, win rate, profit factor, and annualized return
+  metrics.
+- Backtest research page with instrument selection, parameter controls, equity
+  chart, and a trade-by-trade audit table.
+
+Public test seam:
+
+- `runBacktest`: deterministic trade generation and metrics from normalized
+  bars and a `BacktestConfig`.
+
+Acceptance criteria:
+
+- Changing a future bar cannot alter an earlier equity point or closed trade.
+- A buy signal executes at the next bar's open rather than the signal close.
+- Stock sells include stamp duty while fund sells do not.
+- Every trade records entry/exit dates, executed prices, reason, holding days,
+  and net return.
+- The page is usable at 1280x720 and compact widths with loading, empty, and
+  error states.
+
 ## Later Slices
 
 - AKShare Python sidecar with recorded contract fixtures.
 - SQLite normalized cache and incremental refresh.
-- Backtesting with fees, slippage, and look-ahead prevention.
 - OS startup/background scheduling.
 - Provider-specific SMS adapters after selecting a vendor and confirming terms.
