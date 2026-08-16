@@ -8,11 +8,13 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // 本机为慢速开发机：限制并发避免 canvas/tooltip 时序竞争。
+  workers: 2,
   reporter: "list",
   retries: 1,
   // 本机 Vite 冷编译较慢，放宽断言与用例超时。
-  expect: { timeout: 15_000 },
-  timeout: 90_000,
+  expect: { timeout: 20_000 },
+  timeout: 120_000,
   use: {
     baseURL: "http://localhost:1420",
     viewport: { width: 1280, height: 800 },

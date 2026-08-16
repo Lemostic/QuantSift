@@ -97,7 +97,7 @@ export function MarketChartDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="top-[4vh] max-h-[92vh] max-w-[1180px] overflow-hidden rounded-lg p-0">
+      <DialogContent className="max-h-[92vh] max-w-[1180px] overflow-hidden rounded-lg p-0">
         <header className="flex flex-col gap-4 border-b border-border/70 bg-background-elevated/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="flex min-w-0 items-center gap-3 pr-8">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-primary/25 bg-primary/[0.08] text-primary">

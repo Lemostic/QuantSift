@@ -6,6 +6,7 @@ import {
   registerLocale,
   registerStyles,
   type Chart,
+  type Crosshair,
   type KLineData,
   type Styles,
   type DeepPartial,
@@ -13,6 +14,22 @@ import {
 import type { DailyBar } from "@/quant/types";
 import type { BuyTimingMarker, SellTimingMarker } from "@/quant/buy-timing";
 import { buildBuyTimingMarkers, buildSellTimingMarkers } from "@/quant/buy-timing";
+import { computeLegendStats } from "@/quant/indicators";
+
+/* 指标配色：图例与图表线条共用同一套色值，保证所见即所注。 */
+export const CHART_COLORS = {
+  ma5: "#f0b90b",
+  ma20: "#3b82f6",
+  boll: "#c084fc",
+  macdDif: "#f0b90b",
+  macdDea: "#3b82f6",
+  kdjK: "#c084fc",
+  kdjD: "#fbbf24",
+  kdjJ: "#60a5fa",
+  rsi: "#f0b90b",
+  up: "#22c58b",
+  down: "#ef5350",
+} as const;
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -301,21 +318,104 @@ function buildStyles(palette: ChartPalette): DeepPartial<Styles> {
 /* ------------------------------------------------------------------ */
 /*  Legend bar                                                        */
 /* ------------------------------------------------------------------ */
+function LegendItem({
+  color,
+  label,
+  value,
+}: {
+  color: string;
+  label: string;
+  value: number | string | null;
+}) {
+  if (value === null) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      <i className="inline-block h-[3px] w-3 rounded-full" style={{ background: color }} />
+      <span className="text-foreground-muted">{label}</span>
+      <strong>{typeof value === "number" ? value.toFixed(2) : value}</strong>
+    </span>
+  );
+}
+
 function LegendBar({ bars }: { bars: DailyBar[] }) {
-  const latest = bars.at(-1);
-  if (!latest) return null;
-  const change = ((latest.close - latest.open) / latest.open) * 100;
-  const up = change >= 0;
-  const changeColor = up ? "#22c58b" : "#ef5350";
+  const stats = useMemo(() => computeLegendStats(bars), [bars]);
+  if (!stats) return null;
+  const up = stats.changePct >= 0;
+  const changeColor = up ? CHART_COLORS.up : CHART_COLORS.down;
 
   return (
-    <div className="flex h-9 items-center gap-3 overflow-hidden border-b border-border/70 bg-background-elevated/75 px-3 font-mono text-[10px] text-foreground-subtle [&_strong]:font-medium [&_strong]:text-foreground">
-      <span>{latest.tradeDate}</span>
-      <span>开 <strong>{latest.open.toFixed(3)}</strong></span>
-      <span>高 <strong>{latest.high.toFixed(3)}</strong></span>
-      <span>低 <strong>{latest.low.toFixed(3)}</strong></span>
-      <span>收 <strong>{latest.close.toFixed(3)}</strong></span>
-      <span style={{ color: changeColor }}>{up ? "+" : ""}{change.toFixed(2)}%</span>
+    <div className="flex h-9 items-center gap-x-3 gap-y-0 overflow-x-auto whitespace-nowrap border-b border-border/70 bg-background-elevated/75 px-3 font-mono text-[10px] text-foreground-subtle [&_strong]:font-medium [&_strong]:text-foreground">
+      <span className="shrink-0">{stats.tradeDate}</span>
+      <span
+        className="shrink-0 text-[11px] font-semibold"
+        style={{ color: changeColor }}
+      >
+        {stats.close.toFixed(3)}
+      </span>
+      <span className="shrink-0" style={{ color: changeColor }}>
+        {up ? "+" : ""}
+        {stats.changePct.toFixed(2)}%
+      </span>
+      <LegendItem color={CHART_COLORS.ma5} label="MA5" value={stats.ma5} />
+      <LegendItem color={CHART_COLORS.ma20} label="MA20" value={stats.ma20} />
+      <LegendItem color={CHART_COLORS.boll} label="BOLL" value={`${stats.bollUpper ?? "--"} / ${stats.bollLower ?? "--"}`} />
+      <LegendItem color={CHART_COLORS.macdDif} label="MACD" value={`${stats.macdDif ?? "--"} · ${stats.macdDea ?? "--"} · ${stats.macdHist ?? "--"}`} />
+      <LegendItem color={CHART_COLORS.kdjK} label="KDJ" value={`${stats.kdjK ?? "--"} · ${stats.kdjD ?? "--"} · ${stats.kdjJ ?? "--"}`} />
+      <LegendItem color={CHART_COLORS.rsi} label="RSI" value={stats.rsi} />
+      <span className="shrink-0 text-foreground-subtle">
+        量 <strong>{formatVolume(stats.volume)}</strong>
+      </span>
+    </div>
+  );
+}
+
+function formatVolume(volume: number): string {
+  if (volume >= 1_000_000_000) return `${(volume / 1_000_000_000).toFixed(2)}亿`;
+  if (volume >= 10_000) return `${(volume / 10_000).toFixed(1)}万`;
+  return String(Math.round(volume));
+}
+
+/* ------------------------------------------------------------------ */
+/*  Crosshair readout                                                 */
+/* ------------------------------------------------------------------ */
+function CrosshairReadout({
+  bar,
+  changePct,
+}: {
+  bar: DailyBar | null;
+  changePct: number | null;
+}) {
+  if (!bar) return null;
+  const up = bar.close >= bar.open;
+  const color = up ? CHART_COLORS.up : CHART_COLORS.down;
+  return (
+    <div className="pointer-events-none absolute right-2 top-2 z-10 rounded-md border border-border/60 bg-background-overlay/90 px-2.5 py-1.5 font-mono text-[9px] leading-4 text-foreground-muted shadow-diffusion-sm backdrop-blur-sm">
+      <div className="font-semibold text-foreground">
+        {bar.tradeDate}
+        {changePct !== null && (
+          <span className="ml-2" style={{ color: changePct >= 0 ? CHART_COLORS.up : CHART_COLORS.down }}>
+            {changePct >= 0 ? "+" : ""}
+            {changePct.toFixed(2)}%
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <span>
+          开 <strong style={{ color }}>{bar.open.toFixed(3)}</strong>
+        </span>
+        <span>
+          高 <strong style={{ color: CHART_COLORS.up }}>{bar.high.toFixed(3)}</strong>
+        </span>
+        <span>
+          低 <strong style={{ color: CHART_COLORS.down }}>{bar.low.toFixed(3)}</strong>
+        </span>
+        <span>
+          收 <strong style={{ color }}>{bar.close.toFixed(3)}</strong>
+        </span>
+        <span>
+          量 <strong>{formatVolume(bar.volume)}</strong>
+        </span>
+      </div>
     </div>
   );
 }
@@ -341,6 +441,8 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
     [bars],
   );
   const klineData = useMemo(() => barsToKLineData(sortedBars), [sortedBars]);
+  /** 十字光标命中的 K 线；null 表示未悬停（回退显示最新一根）。 */
+  const [activeTradeDate, setActiveTradeDate] = useState<string | null>(null);
 
   // Calculate optimal barSpace to fill the container
   const barCount = sortedBars.length;
@@ -414,22 +516,77 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
     // Set barSpace explicitly after data is loaded (override layout auto)
     chart.setBarSpace(targetSpace);
 
-    // Indicators
-    chart.createIndicator({ name: "MA", calcParams: [5], paneId: "candle_pane" });
-    chart.createIndicator({ name: "MA", calcParams: [20], paneId: "candle_pane" });
+    // Indicators —— 显式指定线条颜色，与图例配色保持一致。
+    chart.createIndicator({
+      name: "MA",
+      calcParams: [5],
+      paneId: "candle_pane",
+      styles: { lines: [{ color: CHART_COLORS.ma5 }] },
+    } as never);
+    chart.createIndicator({
+      name: "MA",
+      calcParams: [20],
+      paneId: "candle_pane",
+      styles: { lines: [{ color: CHART_COLORS.ma20 }] },
+    } as never);
     chart.createIndicator("VOL");
 
     // MACD sub-pane (12, 26, 9)
-    chart.createIndicator({ name: "MACD", calcParams: [12, 26, 9] });
+    chart.createIndicator({
+      name: "MACD",
+      calcParams: [12, 26, 9],
+      styles: {
+        lines: [{ color: CHART_COLORS.macdDif }, { color: CHART_COLORS.macdDea }],
+      },
+    } as never);
 
     // KDJ sub-pane (9, 3, 3)
-    chart.createIndicator({ name: "KDJ", calcParams: [9, 3, 3] });
+    chart.createIndicator({
+      name: "KDJ",
+      calcParams: [9, 3, 3],
+      styles: {
+        lines: [
+          { color: CHART_COLORS.kdjK },
+          { color: CHART_COLORS.kdjD },
+          { color: CHART_COLORS.kdjJ },
+        ],
+      },
+    } as never);
 
     // RSI (14)
-    chart.createIndicator({ name: "RSI", calcParams: [14] });
+    chart.createIndicator({
+      name: "RSI",
+      calcParams: [14],
+      styles: { lines: [{ color: CHART_COLORS.rsi }] },
+    } as never);
 
     // BOLL (20, 2)
-    chart.createIndicator({ name: "BOLL", calcParams: [20, 2], paneId: "candle_pane" });
+    chart.createIndicator({
+      name: "BOLL",
+      calcParams: [20, 2],
+      paneId: "candle_pane",
+      styles: {
+        lines: [
+          { color: CHART_COLORS.boll },
+          { color: CHART_COLORS.boll },
+          { color: CHART_COLORS.boll },
+        ],
+      },
+    } as never);
+
+    // ── Crosshair readout ─────────────────────────────────────────
+    const onCrosshairChange = (data?: unknown) => {
+      const crosshair = data as Crosshair | undefined;
+      if (!crosshair?.timestamp) {
+        setActiveTradeDate(null);
+        return;
+      }
+      const bar = sortedBars.find(
+        (candidate) => toTimestamp(candidate.tradeDate) === crosshair.timestamp,
+      );
+      setActiveTradeDate(bar ? bar.tradeDate : null);
+    };
+    chart.subscribeAction("onCrosshairChange", onCrosshairChange);
 
     // ── Buy-timing signal overlays ────────────────────────────────
     if (markers.length > 0) {
@@ -492,10 +649,32 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
 
     return () => {
       ro.disconnect();
+      try {
+        chart.unsubscribeAction("onCrosshairChange", onCrosshairChange);
+      } catch {
+        // 图表销毁时订阅可能已随实例释放。
+      }
       dispose(container);
       chartRef.current = null;
     };
   }, [klineData, mode, bars, height, barCount]);
+
+  const readoutBar = useMemo(
+    () =>
+      sortedBars.find((bar) => bar.tradeDate === activeTradeDate) ??
+      sortedBars.at(-1) ??
+      null,
+    [sortedBars, activeTradeDate],
+  );
+  const readoutChangePct = useMemo(() => {
+    if (!readoutBar) return null;
+    const index = sortedBars.findIndex(
+      (bar) => bar.tradeDate === readoutBar.tradeDate,
+    );
+    const previous = index > 0 ? sortedBars[index - 1] : null;
+    if (!previous || previous.close === 0) return null;
+    return ((readoutBar.close - previous.close) / previous.close) * 100;
+  }, [readoutBar, sortedBars]);
 
   return (
     <motion.div
@@ -505,7 +684,10 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
       className={className}
     >
       <LegendBar bars={sortedBars} />
-      <div ref={containerRef} className="w-full" style={{ height }} />
+      <div className="relative">
+        <div ref={containerRef} className="w-full" style={{ height }} />
+        <CrosshairReadout bar={readoutBar} changePct={readoutChangePct} />
+      </div>
     </motion.div>
   );
 });
