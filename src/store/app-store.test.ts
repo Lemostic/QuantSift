@@ -70,5 +70,6 @@ describe("app store migration", () => {
       randomness: 30,
       tags: expect.any(Array),
     });
+    expect(migrated.aiFactorCatalog).toEqual([]);
   });
 });

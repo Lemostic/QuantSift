@@ -75,7 +75,7 @@ export async function executeIntelligentScan(
       llm: createInvokeLlmClient(),
       researchProvider,
       factorConfig: state.aiFactorConfig,
-      factorTags: DEFAULT_FACTOR_TAGS,
+      factorTags: [...DEFAULT_FACTOR_TAGS, ...state.aiFactorCatalog],
       listInstruments: () => configuredProvider().listInstruments(),
       listMemory: (instrumentId) => repository.listByInstrument(instrumentId),
       seed,

@@ -40,7 +40,6 @@ import type { CacheStats } from "@/cache/service";
 import {
   DEFAULT_FACTOR_TAGS,
   type FactorConfig,
-  type FactorTag,
   type IntradaySchedule,
   type LlmProviderConfig,
 } from "@/ai/types";
@@ -48,6 +47,8 @@ import {
   LLM_PROVIDER_PRESETS,
   presetById,
 } from "@/ai/provider-presets";
+import { refreshFactorCatalogWithAI } from "@/ai/factor-refresh";
+import { createInvokeLlmClient } from "@/ai/llm";
 
 export function PreferencesPage() {
   const contentPadding = useAppStore((s) => s.contentPadding);
@@ -357,19 +358,19 @@ function AiFactorSettings({
   config: FactorConfig;
   onChange: (config: FactorConfig) => void;
 }) {
+  const aiFactorCatalog = useAppStore((s) => s.aiFactorCatalog);
+  const setAiFactorCatalog = useAppStore((s) => s.setAiFactorCatalog);
+  const aiProviders = useAppStore((s) => s.aiProviders);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
+
   const allTags = useMemo(() => {
     const builtIn = DEFAULT_FACTOR_TAGS;
-    const custom = config.tags
-      .filter((setting) => !builtIn.some((tag) => tag.id === setting.tagId))
-      .map(
-        (setting): FactorTag => ({
-          id: setting.tagId,
-          label: setting.tagId,
-          description: "自定义因子",
-        }),
-      );
-    return [...builtIn, ...custom];
-  }, [config.tags]);
+    const extra = aiFactorCatalog.filter(
+      (tag) => !builtIn.some((candidate) => candidate.id === tag.id),
+    );
+    return [...builtIn, ...extra];
+  }, [aiFactorCatalog]);
 
   const toggle = (tagId: string) => {
     onChange({
@@ -382,10 +383,45 @@ function AiFactorSettings({
     });
   };
 
+  const refreshWithAI = async () => {
+    setRefreshing(true);
+    setRefreshNotice(null);
+    try {
+      const enabledProviders = aiProviders.filter(
+        (provider) => provider.enabled && provider.apiKey.trim().length > 0,
+      );
+      const result = await refreshFactorCatalogWithAI({
+        providers: enabledProviders,
+        llm: createInvokeLlmClient(),
+        currentTags: allTags,
+        enabledTagIds: config.tags
+          .filter((setting) => setting.enabled)
+          .map((setting) => setting.tagId),
+      });
+      // 只留存内置之外的 AI 新增因子。
+      const builtInIds = new Set(DEFAULT_FACTOR_TAGS.map((tag) => tag.id));
+      setAiFactorCatalog(result.tags.filter((tag) => !builtInIds.has(tag.id)));
+      if (result.added.length > 0) {
+        setRefreshNotice(
+          `已新增 ${result.added.length} 个因子：${result.added.map((tag) => tag.label).join("、")}`,
+        );
+      } else {
+        setRefreshNotice("模型未给出新的因子建议，目录保持不变。");
+      }
+      if (result.errors.length > 0) {
+        setRefreshNotice(`${refreshNotice ?? ""}（部分模型失败：${result.errors.join("；")}）`);
+      }
+    } catch (cause) {
+      setRefreshNotice(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <SettingsGroup
       title="随机因子"
-      description="每次智能扫描会基于种子为启用的因子生成随机强调角度（偏多/偏空/中性），覆盖全球市场、国内市场与政策面等维度；种子随会话留存，可复现。随机度 0 表示不使用随机波动。"
+      description="每次智能扫描会基于种子为启用的因子生成随机强调角度（偏多/偏空/中性），覆盖全球市场、国内市场与政策面等维度；种子随会话留存，可复现。随机度 0 表示不使用随机波动。可用 AI 模型评审并增量更新因子目录，保持权威性。"
       icon={<Brain className="h-4 w-4" />}
     >
       <div className="flex flex-wrap gap-2">
@@ -411,6 +447,31 @@ function AiFactorSettings({
             </button>
           );
         })}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+        <p className="min-h-4 text-[11px]">
+          {refreshNotice && (
+            <span
+              className={cn(
+                "flex items-center gap-1.5",
+                refreshNotice.includes("已新增")
+                  ? "text-accent-emerald"
+                  : "text-foreground-muted",
+              )}
+            >
+              {refreshNotice}
+            </span>
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={() => void refreshWithAI()}
+          disabled={refreshing}
+          className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
+        >
+          <Sparkle size={14} className={cn(refreshing && "animate-pulse")} />
+          {refreshing ? "AI 评审中" : "AI 更新因子"}
+        </button>
       </div>
       <div className="mt-4">
         <div className="flex items-center justify-between">

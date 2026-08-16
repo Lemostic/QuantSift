@@ -25,6 +25,7 @@ test("preferences expose AI model, factor and schedule groups", async ({
     page.getByRole("heading", { name: "AI 分析模型" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "随机因子" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "AI 更新因子" })).toBeEnabled();
   await expect(
     page.getByRole("heading", { name: "智能扫描（交易时段）" }),
   ).toBeVisible();

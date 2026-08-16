@@ -6,6 +6,7 @@ import {
   DEFAULT_FACTOR_TAGS,
   DEFAULT_INTRADAY_SCHEDULE,
   type FactorConfig,
+  type FactorTag,
   type IntradaySchedule,
   type LlmProviderConfig,
 } from "@/ai/types";
@@ -31,6 +32,8 @@ interface AppState {
   // AI analysis config (persisted; keys stay local)
   aiProviders: LlmProviderConfig[];
   aiFactorConfig: FactorConfig;
+  /** AI 因子评审增量新增的因子目录（内置之外）。 */
+  aiFactorCatalog: FactorTag[];
   aiIntradaySchedule: IntradaySchedule;
 
   // Actions
@@ -44,6 +47,7 @@ interface AppState {
   setAllowOfflineFallback: (allow: boolean) => void;
   setAiProviders: (providers: LlmProviderConfig[]) => void;
   setAiFactorConfig: (config: FactorConfig) => void;
+  setAiFactorCatalog: (catalog: FactorTag[]) => void;
   setAiIntradaySchedule: (schedule: IntradaySchedule) => void;
 }
 
@@ -154,6 +158,14 @@ export function migrateAppState(
     }
   }
 
+  // ---- v9 ----
+  // AI 因子评审目录（手动刷新随机因子时由模型增量新增）。
+  if (fromVersion < 9) {
+    if (!Array.isArray(p.aiFactorCatalog)) {
+      p.aiFactorCatalog = [];
+    }
+  }
+
   return p;
 }
 
@@ -169,6 +181,7 @@ export const useAppStore = create<AppState>()(
       allowOfflineFallback: true,
       aiProviders: defaultAiProviders(),
       aiFactorConfig: defaultFactorConfig(DEFAULT_FACTOR_TAGS),
+      aiFactorCatalog: [],
       aiIntradaySchedule: { ...DEFAULT_INTRADAY_SCHEDULE },
 
       toggleSidebar: () =>
@@ -200,13 +213,14 @@ export const useAppStore = create<AppState>()(
         set({ allowOfflineFallback }),
       setAiProviders: (aiProviders) => set({ aiProviders }),
       setAiFactorConfig: (aiFactorConfig) => set({ aiFactorConfig }),
+      setAiFactorCatalog: (aiFactorCatalog) => set({ aiFactorCatalog }),
       setAiIntradaySchedule: (aiIntradaySchedule) =>
         set({ aiIntradaySchedule }),
     }),
     {
       name: "quantsift.app-state.v1",
       storage: createJSONStorage(() => localStorage),
-      version: 8,
+      version: 9,
       partialize: (s) => ({
         theme: s.theme,
         recentModules: s.recentModules,
@@ -216,6 +230,7 @@ export const useAppStore = create<AppState>()(
         allowOfflineFallback: s.allowOfflineFallback,
         aiProviders: s.aiProviders,
         aiFactorConfig: s.aiFactorConfig,
+        aiFactorCatalog: s.aiFactorCatalog,
         aiIntradaySchedule: s.aiIntradaySchedule,
       }),
       migrate: migrateAppState,
