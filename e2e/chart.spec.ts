@@ -20,6 +20,8 @@ test("research chart shows the indicator legend and crosshair readout", async ({
   // 十字光标读数面板（默认展示最新一根）
   await expect(page.getByText(/开\s+\d+\.\d+/).first()).toBeVisible();
   await expect(page.getByText(/收\s+\d+\.\d+/).first()).toBeVisible();
+  // 图例钉在最后一个交易日（fixture 数据最新为 2026-07-30），不出现未来日期
+  await expect(page.getByText("2026-07-30").first()).toBeVisible();
 });
 
 test("expanded K-line dialog is vertically centered with legend", async ({

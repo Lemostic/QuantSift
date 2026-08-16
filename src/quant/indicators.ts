@@ -172,3 +172,35 @@ export function computeBarStats(
   const slice = sorted.slice(0, index + 1);
   return computeLegendStats(slice);
 }
+
+/**
+ * 过滤掉晚于“今天”的 K 线（按上海时区），保证图表只展示过去到当前时间点、
+ * 绝不出现未来时间。now 可注入以便确定性测试。
+ */
+export function filterBarsUpToToday(
+  bars: DailyBar[],
+  now: Date = new Date(),
+): DailyBar[] {
+  const shanghaiToday = new Date(now.getTime() + 8 * 3600_000)
+    .toISOString()
+    .slice(0, 10);
+  return bars.filter((bar) => bar.tradeDate <= shanghaiToday);
+}
+
+/**
+ * 计算让 K 线精确铺满容器宽度的 barSpace：
+ * space = (容器宽 - Y 轴预留 - 右缘留白) / 根数，并夹在 [min, max] 内。
+ * 铺满后最后一根 K 线紧贴右缘，时间轴不会延伸出未来日期。
+ */
+export function computeFillBarSpace(
+  containerWidth: number,
+  barCount: number,
+  yAxisReserve = 68,
+  edgePadding = 8,
+  minSpace = 4,
+  maxSpace = 160,
+): number {
+  if (containerWidth <= 0 || barCount <= 0) return minSpace;
+  const usable = Math.max(1, containerWidth - yAxisReserve - edgePadding);
+  return Math.max(minSpace, Math.min(maxSpace, usable / barCount));
+}

@@ -3,8 +3,10 @@ import type { DailyBar } from "./types";
 import {
   boll,
   computeBarStats,
+  computeFillBarSpace,
   computeLegendStats,
   ema,
+  filterBarsUpToToday,
   kdj,
   macd,
   rsi,
@@ -107,5 +109,51 @@ describe("computeLegendStats", () => {
       ((prefixCloses[9] - prefixCloses[8]) / prefixCloses[8]) * 100,
       6,
     );
+  });
+});
+
+describe("filterBarsUpToToday", () => {
+  it("keeps bars up to today (Shanghai) and drops future dates", () => {
+    const bars = barsFromCloses([1, 2, 3, 4]);
+    const now = new Date("2026-07-01T20:00:00Z"); // 上海已是 07-02
+    const filtered = filterBarsUpToToday(bars, now);
+    expect(filtered.map((bar) => bar.tradeDate)).toEqual([
+      "2026-07-01",
+      "2026-07-02",
+    ]);
+  });
+
+  it("keeps everything when all bars are in the past", () => {
+    const bars = barsFromCloses([1, 2, 3, 4]);
+    const filtered = filterBarsUpToToday(
+      bars,
+      new Date("2026-08-01T00:00:00Z"),
+    );
+    expect(filtered).toHaveLength(4);
+  });
+});
+
+describe("computeFillBarSpace", () => {
+  it("stretches few bars to fill the container", () => {
+    // 1000px 容器、7 根 K 线：每根约 132px，铺满。
+    const space = computeFillBarSpace(1000, 7);
+    expect(space).toBeCloseTo((1000 - 68 - 8) / 7, 6);
+    expect(space).toBeLessThanOrEqual(160);
+  });
+
+  it("keeps dense data narrow enough to fill", () => {
+    // 60 根铺满 1000px：每根约 15.4px，未触顶。
+    const space = computeFillBarSpace(1000, 60);
+    expect(space).toBeCloseTo((1000 - 68 - 8) / 60, 6);
+    expect(space).toBeLessThan(160);
+  });
+
+  it("caps extremely few bars at the max space", () => {
+    expect(computeFillBarSpace(2000, 3)).toBe(160);
+  });
+
+  it("never returns absurd values for degenerate inputs", () => {
+    expect(computeFillBarSpace(0, 7)).toBe(4);
+    expect(computeFillBarSpace(1000, 0)).toBe(4);
   });
 });

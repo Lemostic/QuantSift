@@ -14,7 +14,7 @@ import {
 import type { DailyBar } from "@/quant/types";
 import type { BuyTimingMarker, SellTimingMarker } from "@/quant/buy-timing";
 import { buildBuyTimingMarkers, buildSellTimingMarkers } from "@/quant/buy-timing";
-import { computeLegendStats } from "@/quant/indicators";
+import { computeFillBarSpace, computeLegendStats, filterBarsUpToToday } from "@/quant/indicators";
 
 /* 指标配色：图例与图表线条共用同一套色值，保证所见即所注。 */
 export const CHART_COLORS = {
@@ -437,7 +437,10 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
   );
 
   const sortedBars = useMemo(
-    () => [...bars].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate)),
+    () =>
+      filterBarsUpToToday(
+        [...bars].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate)),
+      ),
     [bars],
   );
   const klineData = useMemo(() => barsToKLineData(sortedBars), [sortedBars]);
@@ -469,16 +472,12 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
 
     const palette = mode === "dark" ? darkPalette : lightPalette;
 
-    // Compute barSpace so that barCount * barSpace ≈ container width - yAxis width
-    const yAxisReserve = 68;
-    const targetSpace = Math.max(4, Math.min(30, (container.clientWidth - yAxisReserve) / (barCount + 1)));
-
     const chart = init(container, {
       locale: "zh-CN",
       timezone: "Asia/Shanghai",
       styles: mode === "dark" ? "quantsift-dark" : "quantsift-light",
       layout: {
-        barSpaceLimit: { min: 4, max: 30 },
+        barSpaceLimit: { min: 4, max: 160 },
         pane: { minHeight: 60, dragEnabled: true },
         yAxis: {
           position: "right",
@@ -493,6 +492,14 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
 
     if (!chart) return;
     chartRef.current = chart;
+
+    // barSpace 精确铺满容器（最后一根紧贴右缘，时间轴不会延伸出未来日期）。
+    const applyFill = () => {
+      chart.setBarSpace(
+        computeFillBarSpace(container.clientWidth, klineData.length),
+      );
+      chart.resize();
+    };
 
     // Configure symbol and period
     chart.setSymbol({
@@ -514,7 +521,7 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
     const sellMarkers = externalSellMarkers ?? buildSellTimingMarkers(sortedBars);
 
     // Set barSpace explicitly after data is loaded (override layout auto)
-    chart.setBarSpace(targetSpace);
+    applyFill();
 
     // Indicators —— 显式指定线条颜色，与图例配色保持一致。
     chart.createIndicator({
@@ -643,8 +650,8 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
       }
     }
 
-    // Resize handling
-    const ro = new ResizeObserver(() => chart.resize());
+    // Resize handling —— 重算铺满间距
+    const ro = new ResizeObserver(() => applyFill());
     ro.observe(container);
 
     return () => {
