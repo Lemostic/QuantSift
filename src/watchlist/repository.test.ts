@@ -73,5 +73,44 @@ describe("LocalWatchlistRepository", () => {
       "CN:510300",
     ]);
   });
+
+  it("defaults autoAnalyze to false and persists its updates", async () => {
+    const repository = new LocalWatchlistRepository(new MemoryStorage());
+
+    await repository.add("CN:510300");
+    expect((await repository.list())[0].autoAnalyze).toBe(false);
+
+    await repository.update("CN:510300", { autoAnalyze: true });
+    expect((await repository.list())[0].autoAnalyze).toBe(true);
+  });
+
+  it("hydrates pre-v3 documents with autoAnalyze false", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      "quantsift.watchlist.v1",
+      JSON.stringify({
+        version: 2,
+        entries: [
+          {
+            instrumentId: "CN:600519",
+            note: "旧数据",
+            tags: [],
+            enabled: true,
+            addedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        appliedMigrations: [],
+      }),
+    );
+    const repository = new LocalWatchlistRepository(storage);
+
+    expect(await repository.list()).toMatchObject([
+      {
+        instrumentId: "CN:600519",
+        autoAnalyze: false,
+        enabled: true,
+      },
+    ]);
+  });
 });
 

@@ -3,6 +3,8 @@ export interface WatchlistEntry {
   note: string;
   tags: string[];
   enabled: boolean;
+  /** 是否参与定时智能化推荐分析。 */
+  autoAnalyze: boolean;
   addedAt: string;
 }
 
@@ -10,6 +12,7 @@ export interface WatchlistUpdate {
   note?: string;
   tags?: string[];
   enabled?: boolean;
+  autoAnalyze?: boolean;
 }
 
 export interface StorageAdapter {
@@ -27,13 +30,13 @@ export interface WatchlistRepository {
 }
 
 interface WatchlistDocument {
-  version: 2;
+  version: 3;
   entries: WatchlistEntry[];
   appliedMigrations: string[];
 }
 
 interface LegacyWatchlistDocument {
-  version: 1;
+  version: 1 | 2;
   entries: WatchlistEntry[];
 }
 
@@ -70,6 +73,11 @@ function isWatchlistEntry(value: unknown): value is WatchlistEntry {
   );
 }
 
+/** v2 文档缺少 autoAnalyze 字段：读取时补齐默认值。 */
+function hydrateEntry(entry: WatchlistEntry): WatchlistEntry {
+  return { ...entry, autoAnalyze: entry.autoAnalyze ?? false };
+}
+
 export class LocalWatchlistRepository implements WatchlistRepository {
   constructor(
     private readonly storage: StorageAdapter,
@@ -85,12 +93,13 @@ export class LocalWatchlistRepository implements WatchlistRepository {
     if (this.storage.getItem(this.key) !== null) return;
     const addedAt = this.now().toISOString();
     this.write({
-      version: 2,
+      version: 3,
       entries: instrumentIds.map((instrumentId) => ({
         instrumentId,
         note: "",
         tags: ["示例"],
         enabled: true,
+        autoAnalyze: false,
         addedAt,
       })),
       appliedMigrations: [],
@@ -113,6 +122,7 @@ export class LocalWatchlistRepository implements WatchlistRepository {
         note: "人工智能主题基金，等待回踩确认",
         tags: ["重点监控", "AI主题"],
         enabled: true,
+        autoAnalyze: false,
         addedAt,
       });
     }
@@ -130,6 +140,7 @@ export class LocalWatchlistRepository implements WatchlistRepository {
       note: "",
       tags: [],
       enabled: true,
+      autoAnalyze: false,
       addedAt: this.now().toISOString(),
     };
     document.entries.push(entry);
@@ -153,6 +164,7 @@ export class LocalWatchlistRepository implements WatchlistRepository {
       note: update.note === undefined ? current.note : update.note.trim(),
       tags: update.tags === undefined ? current.tags : normalizeTags(update.tags),
       enabled: update.enabled ?? current.enabled,
+      autoAnalyze: update.autoAnalyze ?? current.autoAnalyze,
     };
     document.entries[index] = next;
     this.write(document);
@@ -169,17 +181,18 @@ export class LocalWatchlistRepository implements WatchlistRepository {
 
   private read(): WatchlistDocument {
     const raw = this.storage.getItem(this.key);
-    if (raw === null) return { version: 2, entries: [], appliedMigrations: [] };
+    if (raw === null) return { version: 3, entries: [], appliedMigrations: [] };
     try {
       const parsed = JSON.parse(raw) as Partial<WatchlistDocument> | Partial<LegacyWatchlistDocument>;
       if (
         Array.isArray(parsed.entries) &&
         parsed.entries.every(isWatchlistEntry)
       ) {
-        if (parsed.version === 2) {
+        const hydrated = parsed.entries.map(hydrateEntry);
+        if (parsed.version === 2 || parsed.version === 3) {
           return {
-            version: 2,
-            entries: parsed.entries,
+            version: 3,
+            entries: hydrated,
             appliedMigrations: Array.isArray((parsed as Partial<WatchlistDocument>).appliedMigrations)
               ? (parsed as Partial<WatchlistDocument>).appliedMigrations!.filter(
                   (value): value is string => typeof value === "string",
@@ -188,13 +201,13 @@ export class LocalWatchlistRepository implements WatchlistRepository {
           };
         }
         if (parsed.version === 1) {
-          return { version: 2, entries: parsed.entries, appliedMigrations: [] };
+          return { version: 3, entries: hydrated, appliedMigrations: [] };
         }
       }
     } catch {
       // Fall through to a safe empty document; the next mutation repairs it.
     }
-    return { version: 2, entries: [], appliedMigrations: [] };
+    return { version: 3, entries: [], appliedMigrations: [] };
   }
 
   private write(document: WatchlistDocument) {

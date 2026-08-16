@@ -9,6 +9,7 @@ import {
   NotePencil,
   PauseCircle,
   Plus,
+  Sparkle,
   Tag,
   Trash,
   Warning,
@@ -402,7 +403,7 @@ function WatchlistRow({
   recommendation?: Recommendation;
   selected: boolean;
   onSelect: () => void;
-  onUpdate: (value: { enabled?: boolean }) => void;
+  onUpdate: (value: { enabled?: boolean; autoAnalyze?: boolean }) => void;
   onRemove: () => void;
   onShowChart: () => void;
 }) {
@@ -500,6 +501,13 @@ function WatchlistRow({
             {entry.enabled ? "扫描已启用" : "扫描已暂停"}
           </span>
         </div>
+        <IconAction
+          label={entry.autoAnalyze ? "已参与智能分析，点击取消" : "参与智能分析（定时 AI 推荐）"}
+          onClick={() => onUpdate({ autoAnalyze: !entry.autoAnalyze })}
+          active={entry.autoAnalyze}
+        >
+          <Sparkle size={15} />
+        </IconAction>
         <IconAction label={`查看 ${instrument.name} K 线`} onClick={onShowChart}>
           <ChartLineUp size={15} />
         </IconAction>
@@ -554,18 +562,21 @@ function MonitorToggle({
 function IconAction({
   label,
   onClick,
-  danger,
+  danger = false,
+  active = false,
   children,
 }: {
   label: string;
   onClick: () => void;
   danger?: boolean;
+  active?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active}
       title={label}
       onClick={(event) => {
         event.stopPropagation();
@@ -574,6 +585,7 @@ function IconAction({
       className={cn(
         "grid h-8 w-8 place-items-center text-foreground-subtle transition-colors hover:bg-accent hover:text-foreground active:scale-[0.96]",
         danger && "hover:text-accent-rose",
+        active && "text-primary",
       )}
     >
       {children}
