@@ -157,7 +157,7 @@ export function CommandPalette() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        className="top-[14vh] max-w-[620px] overflow-hidden rounded-lg p-0"
+        className="max-h-[80vh] max-w-[620px] overflow-hidden rounded-lg p-0"
         hideClose
       >
         <DialogTitle className="sr-only">工作区命令</DialogTitle>
