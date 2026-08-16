@@ -86,8 +86,22 @@ export function migrateAppState(
     p.allowOfflineFallback = true;
   }
 
-  if (p.marketDataSource !== "akshare" && p.marketDataSource !== "recorded") {
-    p.marketDataSource = "akshare";
+  // ---- v7 ----
+  // The live source moved from the AKShare Python sidecar to the native
+  // Rust EastMoney provider; the old persisted id is migrated.
+  if (fromVersion < 7) {
+    if (p.marketDataSource === "akshare") {
+      p.marketDataSource = "eastmoney";
+    } else if (
+      p.marketDataSource !== "eastmoney" &&
+      p.marketDataSource !== "recorded"
+    ) {
+      p.marketDataSource = "eastmoney";
+    }
+  }
+
+  if (p.marketDataSource !== "eastmoney" && p.marketDataSource !== "recorded") {
+    p.marketDataSource = "eastmoney";
   }
   if (typeof p.allowOfflineFallback !== "boolean") {
     p.allowOfflineFallback = true;
@@ -104,7 +118,7 @@ export const useAppStore = create<AppState>()(
       theme: "dark",
       recentModules: [],
       contentPadding: DEFAULT_PADDING,
-      marketDataSource: "akshare",
+      marketDataSource: "eastmoney",
       allowOfflineFallback: true,
 
       toggleSidebar: () =>
@@ -138,7 +152,7 @@ export const useAppStore = create<AppState>()(
     {
       name: "quantsift.app-state.v1",
       storage: createJSONStorage(() => localStorage),
-      version: 6,
+      version: 7,
       partialize: (s) => ({
         theme: s.theme,
         recentModules: s.recentModules,

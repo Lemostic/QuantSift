@@ -18,6 +18,3 @@ gen/schemas
 __pycache__
 *.pyc
 .pytest_cache
-sidecar/.build
-sidecar/*.spec
-src-tauri/binaries/quantsift-sidecar-*

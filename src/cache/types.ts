@@ -11,7 +11,7 @@ export interface CachedInstrumentState {
   lastFetchedAt: string;
   /** Number of cached bars. */
   barCount: number;
-  /** Provider id of the most recent write (e.g. "akshare" or "recorded"). */
+  /** Provider id of the most recent write (e.g. "eastmoney" or "recorded"). */
   source: string;
 }
 

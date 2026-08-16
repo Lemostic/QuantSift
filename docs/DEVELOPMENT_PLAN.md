@@ -285,6 +285,50 @@ Acceptance criteria:
   reported, not silently swallowed.
 - All tests run without network access and remain deterministic.
 
+## Slice 9: Rust-Native EastMoney Provider
+
+Status: implemented (v0.6.0).
+
+Goal: remove the Python AKShare sidecar entirely and fetch the same vendor
+data natively from Rust, so the app needs no Python runtime, no V8 JS
+engine, and no PyInstaller payload.
+
+Deliverables:
+
+- `src-tauri/src/market/catalog.rs` — static watchlist catalog and
+  civil-date helpers for the kline `beg` window.
+- `src-tauri/src/market/client.rs` — reqwest client for the EastMoney kline
+  and fund-NAV endpoints (the same endpoints AKShare wrapped), with a 20s
+  timeout and browser User-Agent.
+- `src-tauri/src/market/parse.rs` — pure JSON parsing with deterministic
+  tests against recorded fixtures (`src-tauri/src/market/fixtures/`).
+- `eastmoney_list_instruments` / `eastmoney_get_daily_bars` Tauri commands;
+  error strings carry a `网络` marker so the frontend classifies network
+  failures for cache/fixture fallback.
+- Frontend `eastmoney-provider.ts` replaces the AKShare provider; store
+  migration v7 maps the old `akshare` source id to `eastmoney`.
+- Removed: `sidecar/` (Python + fixtures + pytest), `src-tauri/src/sidecar/`,
+  `scripts/build-sidecar.ps1`, PyInstaller/mini-racer machinery, and the
+  `externalBin` sidecar bundling — the installer no longer carries a Python
+  runtime.
+
+Public test seam:
+
+- `MarketDataProvider` (unchanged contract, new provider implementation).
+- Rust parse/catalog unit tests run without network access.
+
+Acceptance criteria:
+
+- A live `get_daily_bars` request returns the same normalized bar shape the
+  sidecar produced (provider id `eastmoney`, qfq bars for stocks/ETFs, NAV
+  bars for OTC funds).
+- The app runs with zero Python installed; the installer contains no
+  `quantsift-sidecar.exe`.
+- Network failures still fall back to the local cache and recorded fixtures
+  with a visible freshness notice.
+- `pnpm test`, `pnpm lint`, `cargo test --lib`, and the frontend build all
+  pass.
+
 ## Later Slices
 
 - SQLite adapter for `BarCacheStore` and cache size management.

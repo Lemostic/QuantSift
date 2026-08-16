@@ -9,7 +9,7 @@ QuantSift 是一款本地优先的个人桌面量化研究助手。首个版本�
 - Tauri 2 + React 19 + TypeScript 桌面应用
 - 股票、基金统一标的与日线模型
 - 可替换的 `MarketDataProvider` 数据边界
-- AKShare 实时数据源（Python sidecar），失败时自动回退离线样例
+- 东方财富实时数据源（Rust 原生 HTTP），失败时自动回退离线样例
 - 本地行情缓存：启动即渲染缓存、增量刷新最新行情、离线兜底
 - MA5/MA20、20 日动量、年化波动率因子
 - “买入观察 / 继续观察 / 暂不交易”三级研究信号
@@ -20,12 +20,14 @@ QuantSift 是一款本地优先的个人桌面量化研究助手。首个版本�
 - 本地命令面板，可快速跳转研究、监控、持仓、扫描和提醒工作区
 - 内置离线行情样例，开发和演示不依赖外部 API
 
-数据流：前端只依赖 `MarketDataProvider` 契约。生产模式通过 Tauri 命令调用
-Python sidecar（`sidecar/quantsift_sidecar.py`，底层使用 AKShare 拉取 A 股、
-ETF 与场外基金日线）；sidecar 不可用或网络失败时自动回退到内置离线样例，
-并在看板顶部显示数据源与回退提示。所有抓取的日线会写入本地缓存
-（`src/cache/`）：研究台启动时先展示缓存结果，再增量刷新最新行情；实时源
-不可用时缓存行情可离线查看，偏好页可查看缓存统计并手动清空。
+数据流：前端只依赖 `MarketDataProvider` 契约。生产模式通过 Tauri 命令
+（`eastmoney_list_instruments` / `eastmoney_get_daily_bars`）调用内置的 Rust
+数据服务（`src-tauri/src/market/`），直接读取东方财富公开接口拉取 A 股、ETF
+与场外基金日线（股票/ETF 为前复权日 K，场外基金为净值），不依赖 Python 或
+第三方密钥；网络失败时自动回退到内置离线样例，并在看板顶部显示数据源与
+回退提示。所有抓取的日线会写入本地缓存（`src/cache/`）：研究台启动时先
+展示缓存结果，再增量刷新最新行情；实时源不可用时缓存行情可离线查看，
+偏好页可查看缓存统计并手动清空。
 
 ## 开发
 
@@ -45,10 +47,11 @@ pnpm dev
 pnpm tauri dev
 ```
 
-Python sidecar 测试（不依赖网络）：
+Rust 数据服务单元测试（使用录制响应，不依赖网络）：
 
-```bash
-python3 -m pytest sidecar -v
+```powershell
+cd src-tauri
+cargo test --lib
 ```
 
 ## Windows 打包
@@ -99,11 +102,10 @@ lipo -archs src-tauri/target/universal-apple-darwin/release/bundle/macos/QuantSi
 ```text
 src/quant/       领域类型与推荐引擎
 src/cache/       本地行情缓存、增量刷新与新鲜度计算
-src/data/        数据提供方契约、AKShare provider、离线样例、回退注册表
+src/data/        数据提供方契约、东方财富 provider、离线样例、回退注册表
 src/routes/      桌面视图
 src-tauri/       Tauri 2 后端与打包配置
-  src/sidecar/   Python sidecar 进程管理与 JSON-RPC 客户端
-sidecar/         AKShare Python sidecar 与录制 fixtures
+  src/market/    Rust 原生东方财富数据服务（HTTP + 解析 + 命令）
 scripts/         Windows 构建脚本
 build-macos.sh   macOS 通用包构建脚本
 docs/            产品边界与后续实施说明

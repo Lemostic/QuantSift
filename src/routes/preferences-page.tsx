@@ -283,9 +283,9 @@ function MarketDataSettings({
   onSourceChange,
   onFallbackChange,
 }: {
-  source: "akshare" | "recorded";
+  source: "eastmoney" | "recorded";
   allowFallback: boolean;
-  onSourceChange: (source: "akshare" | "recorded") => void;
+  onSourceChange: (source: "eastmoney" | "recorded") => void;
   onFallbackChange: (allow: boolean) => void;
 }) {
   const [testing, setTesting] = useState(false);
@@ -304,7 +304,7 @@ function MarketDataSettings({
       setTestResult({
         ok: true,
         message:
-          source === "akshare"
+          source === "eastmoney"
             ? `实时数据服务可用，已读取 ${instruments.length} 个标的`
             : `离线样本可用，包含 ${instruments.length} 个标的`,
       });
@@ -322,12 +322,12 @@ function MarketDataSettings({
     <div className="space-y-4">
       <div className="grid gap-2 sm:grid-cols-2">
         <ProviderOption
-          active={source === "akshare"}
+          active={source === "eastmoney"}
           icon={<WifiHigh size={18} className="text-primary" />}
-          title="AKShare 实时数据"
-          detail="通过应用内置数据服务读取 A 股、ETF 与公募基金行情，无需 API 密钥。"
+          title="东方财富实时数据"
+          detail="应用内置数据服务直接读取 A 股、ETF 与公募基金行情，无需 API 密钥，不依赖 Python。"
           onClick={() => {
-            onSourceChange("akshare");
+            onSourceChange("eastmoney");
             setTestResult(null);
           }}
         />
@@ -349,8 +349,7 @@ function MarketDataSettings({
           "flex items-center justify-between gap-4 border-y border-border/60 py-3",
           source === "recorded" && "opacity-50",
         )}
-      >
-        <span>
+      >        <span>
           <span className="block text-xs font-medium">实时源失败时使用离线样本</span>
           <span className="mt-0.5 block text-[10px] text-muted-foreground">
             关闭后会直接显示连接错误，避免把样本数据误认为实时行情。

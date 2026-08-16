@@ -6,15 +6,27 @@ describe("app store migration", () => {
     const migrated = migrateAppState({ theme: "dark" }, 5);
 
     expect(migrated).toMatchObject({
-      marketDataSource: "akshare",
+      marketDataSource: "eastmoney",
       allowOfflineFallback: true,
     });
   });
 
-  it("preserves valid v6 data settings", () => {
+  it("migrates the pre-v7 akshare source id to eastmoney", () => {
+    const migrated = migrateAppState(
+      { marketDataSource: "akshare", allowOfflineFallback: true },
+      6,
+    );
+
+    expect(migrated).toMatchObject({
+      marketDataSource: "eastmoney",
+      allowOfflineFallback: true,
+    });
+  });
+
+  it("preserves valid v7 data settings", () => {
     const migrated = migrateAppState(
       { marketDataSource: "recorded", allowOfflineFallback: false },
-      6,
+      7,
     );
 
     expect(migrated).toMatchObject({
@@ -26,11 +38,11 @@ describe("app store migration", () => {
   it("repairs invalid persisted data settings", () => {
     const migrated = migrateAppState(
       { marketDataSource: "unknown", allowOfflineFallback: "yes" },
-      6,
+      7,
     );
 
     expect(migrated).toMatchObject({
-      marketDataSource: "akshare",
+      marketDataSource: "eastmoney",
       allowOfflineFallback: true,
     });
   });

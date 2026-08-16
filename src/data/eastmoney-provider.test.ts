@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  createAkShareMarketDataProvider,
+  createEastMoneyMarketDataProvider,
+  EastMoneyError,
   type InvokeFn,
-} from "./akshare-provider";
+} from "./eastmoney-provider";
 import {
   ProviderRegistry,
   configuredProvider,
@@ -13,9 +14,9 @@ import { recordedMarketDataProvider } from "./recorded-provider";
 import { useAppStore } from "@/store/app-store";
 
 /**
- * The AKShare provider talks to Tauri via `invoke`. These tests inject a fake
- * bridge so the provider contract is verified without a Rust process or a
- * live network.
+ * The EastMoney provider talks to Tauri via `invoke`. These tests inject a
+ * fake bridge so the provider contract is verified without a Rust process
+ * or a live network.
  */
 
 const stockInstrument = {
@@ -36,18 +37,18 @@ const stockBar = {
   close: 1346.5,
   volume: 2707300,
   adjustment: "forward",
-  provider: "akshare",
+  provider: "eastmoney",
   fetchedAt: "2026-08-11T22:00:00+08:00",
 } as const;
 
 function fakeProvider(handler: InvokeFn) {
-  return createAkShareMarketDataProvider(handler);
+  return createEastMoneyMarketDataProvider(handler);
 }
 
-describe("akshareMarketDataProvider", () => {
-  it("normalizes listInstruments from the sidecar", async () => {
+describe("eastMoneyMarketDataProvider", () => {
+  it("normalizes listInstruments from the native commands", async () => {
     const provider = fakeProvider(async (cmd) => {
-      expect(cmd).toBe("sidecar_list_instruments");
+      expect(cmd).toBe("eastmoney_list_instruments");
       return [stockInstrument];
     });
 
@@ -63,9 +64,9 @@ describe("akshareMarketDataProvider", () => {
     });
   });
 
-  it("normalizes getDailyBars from the sidecar", async () => {
+  it("normalizes getDailyBars from the native commands", async () => {
     const provider = fakeProvider(async (cmd, args) => {
-      expect(cmd).toBe("sidecar_get_daily_bars");
+      expect(cmd).toBe("eastmoney_get_daily_bars");
       expect(args).toEqual({ instrumentId: "CN:600519", limit: 30 });
       return [stockBar];
     });
@@ -76,26 +77,36 @@ describe("akshareMarketDataProvider", () => {
       instrumentId: "CN:600519",
       tradeDate: "2026-08-11",
       adjustment: "forward",
-      provider: "akshare",
+      provider: "eastmoney",
     });
   });
 
-  it("classifies sidecar failures as AkShareSidecarError", async () => {
-    const { AkShareSidecarError } = await import("./akshare-provider");
+  it("classifies network failures as EastMoneyError", async () => {
     const provider = fakeProvider(async () => {
       throw new Error("网络错误: Max retries exceeded");
     });
 
     await expect(provider.listInstruments()).rejects.toBeInstanceOf(
-      AkShareSidecarError,
+      EastMoneyError,
     );
+  });
+
+  it("classifies non-network failures as market errors", async () => {
+    const provider = fakeProvider(async () => {
+      throw new Error("无行情数据");
+    });
+
+    await expect(provider.getDailyBars("CN:600519", 30)).rejects.toMatchObject({
+      name: "EastMoneyError",
+      code: "market_error",
+    });
   });
 });
 
 describe("ProviderRegistry", () => {
-  it("defaults to the AKShare and recorded providers", () => {
+  it("defaults to the EastMoney and recorded providers", () => {
     const reg = new ProviderRegistry();
-    expect(reg.provider("akshare").id).toBe("akshare");
+    expect(reg.provider("eastmoney").id).toBe("eastmoney");
     expect(reg.provider("recorded").id).toBe("recorded-fixture");
   });
 
@@ -105,8 +116,8 @@ describe("ProviderRegistry", () => {
       listInstruments: () => Promise.resolve([]),
       getDailyBars: () => Promise.resolve([]),
     };
-    const reg = new ProviderRegistry({ akshare: stub });
-    expect(reg.provider("akshare").id).toBe("stub");
+    const reg = new ProviderRegistry({ eastmoney: stub });
+    expect(reg.provider("eastmoney").id).toBe("stub");
   });
 
   it("returns only the provider selected in settings", () => {
@@ -118,8 +129,8 @@ describe("ProviderRegistry", () => {
       useAppStore.getState().setMarketDataSource("recorded");
       expect(configuredProvider().id).toBe("recorded-fixture");
 
-      useAppStore.getState().setMarketDataSource("akshare");
-      expect(configuredProvider().id).toBe("akshare");
+      useAppStore.getState().setMarketDataSource("eastmoney");
+      expect(configuredProvider().id).toBe("eastmoney");
     } finally {
       useAppStore.getState().setMarketDataSource(previousSource);
       persistWarning.mockRestore();
@@ -137,38 +148,37 @@ describe("loadWithFallback", () => {
     expect(result.recommendations.length).toBeGreaterThan(0);
   });
 
-  it("falls back to recorded when akshare is unavailable", async () => {
+  it("falls back to recorded when eastmoney is unavailable", async () => {
     const broken: MarketDataProvider = {
-      id: "akshare",
+      id: "eastmoney",
       listInstruments: () => Promise.reject(new Error("网络错误: Max retries")),
       getDailyBars: () => Promise.reject(new Error("网络错误: Max retries")),
     };
-    const reg = new ProviderRegistry({ akshare: broken });
+    const reg = new ProviderRegistry({ eastmoney: broken });
 
-    const result = await loadWithFallback(["CN:600519"], "akshare", true, reg);
+    const result = await loadWithFallback(["CN:600519"], "eastmoney", true, reg);
     expect(result.source).toBe("recorded");
     expect(result.fellBack).toBe(true);
     expect(result.error).toMatch(/网络/);
     expect(result.recommendations.length).toBeGreaterThan(0);
-
   });
 
   it("does not silently use fixtures when fallback is disabled", async () => {
     const broken: MarketDataProvider = {
-      id: "akshare",
+      id: "eastmoney",
       listInstruments: () => Promise.reject(new Error("live provider unavailable")),
       getDailyBars: () => Promise.reject(new Error("live provider unavailable")),
     };
-    const reg = new ProviderRegistry({ akshare: broken });
+    const reg = new ProviderRegistry({ eastmoney: broken });
 
     const result = await loadWithFallback(
       ["CN:600519"],
-      "akshare",
+      "eastmoney",
       false,
       reg,
     );
 
-    expect(result.source).toBe("akshare");
+    expect(result.source).toBe("eastmoney");
     expect(result.fellBack).toBe(false);
     expect(result.recommendations).toEqual([]);
     expect(result.error).toMatch(/live provider unavailable/);
@@ -176,7 +186,7 @@ describe("loadWithFallback", () => {
 
   it("returns an error when both sources fail", async () => {
     const broken: MarketDataProvider = {
-      id: "akshare",
+      id: "eastmoney",
       listInstruments: () => Promise.reject(new Error("网络错误")),
       getDailyBars: () => Promise.reject(new Error("网络错误")),
     };
@@ -185,13 +195,12 @@ describe("loadWithFallback", () => {
       listInstruments: () => Promise.reject(new Error("fixture 损坏")),
       getDailyBars: () => Promise.reject(new Error("fixture 损坏")),
     };
-    const reg = new ProviderRegistry({ akshare: broken, recorded: alsoBroken });
+    const reg = new ProviderRegistry({ eastmoney: broken, recorded: alsoBroken });
 
-    const result = await loadWithFallback(["CN:600519"], "akshare", true, reg);
+    const result = await loadWithFallback(["CN:600519"], "eastmoney", true, reg);
     expect(result.recommendations).toHaveLength(0);
     expect(result.fellBack).toBe(true);
     expect(result.error).toMatch(/fixture 损坏/);
-
   });
 
   it("keeps recorded provider usable directly", async () => {

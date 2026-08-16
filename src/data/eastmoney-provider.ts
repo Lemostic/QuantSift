@@ -15,11 +15,11 @@ export const defaultInvoke: InvokeFn = (cmd, args) =>
   tauriInvoke(cmd, args as never);
 
 /**
- * Response shapes returned by the Rust sidecar commands.
+ * Response shapes returned by the Rust market commands.
  * Field names are camelCase because the Rust structs use
  * `#[serde(rename_all = "camelCase")]`.
  */
-interface SidecarInstrument {
+interface MarketInstrument {
   id: string;
   symbol: string;
   name: string;
@@ -28,7 +28,7 @@ interface SidecarInstrument {
   currency: "CNY";
 }
 
-interface SidecarBar {
+interface MarketBar {
   instrumentId: string;
   tradeDate: string;
   open: number;
@@ -41,17 +41,17 @@ interface SidecarBar {
   fetchedAt: string;
 }
 
-export class AkShareSidecarError extends Error {
+export class EastMoneyError extends Error {
   constructor(
     message: string,
     readonly code: string,
   ) {
     super(message);
-    this.name = "AkShareSidecarError";
+    this.name = "EastMoneyError";
   }
 }
 
-function toInstrument(value: SidecarInstrument): Instrument {
+function toInstrument(value: MarketInstrument): Instrument {
   return {
     id: value.id,
     symbol: value.symbol,
@@ -62,7 +62,7 @@ function toInstrument(value: SidecarInstrument): Instrument {
   };
 }
 
-function toDailyBar(value: SidecarBar): DailyBar {
+function toDailyBar(value: MarketBar): DailyBar {
   return {
     instrumentId: value.instrumentId,
     tradeDate: value.tradeDate,
@@ -77,32 +77,33 @@ function toDailyBar(value: SidecarBar): DailyBar {
   };
 }
 
-function normalizeError(cause: unknown): AkShareSidecarError {
-  if (cause instanceof AkShareSidecarError) return cause;
+function normalizeError(cause: unknown): EastMoneyError {
+  if (cause instanceof EastMoneyError) return cause;
   const message = cause instanceof Error ? cause.message : String(cause);
-  // The Rust command serializes SidecarError via to_string(); try to detect
-  // the network case so the UI can show a freshness/fallback notice.
+  // The Rust commands serialize fetch failures with a 网络/Network marker so
+  // the UI can show a freshness/fallback notice instead of a hard error.
   const code = /网络|Network|timeout|Timeout|Max retries/i.test(message)
     ? "network_error"
-    : "sidecar_error";
-  return new AkShareSidecarError(message, code);
+    : "market_error";
+  return new EastMoneyError(message, code);
 }
 
 /**
- * MarketDataProvider backed by the AKShare Python sidecar through the Tauri
- * invoke bridge. UI and strategy code keep depending on the provider
- * contract; they never talk to AKShare or vendor endpoints directly.
+ * MarketDataProvider backed by the native Rust market commands, which fetch
+ * A-share/ETF daily bars and fund NAVs from the EastMoney public endpoints.
+ * UI and strategy code keep depending on the provider contract; they never
+ * talk to vendor endpoints directly.
  */
-export function createAkShareMarketDataProvider(
+export function createEastMoneyMarketDataProvider(
   invokeFn: InvokeFn = defaultInvoke,
 ): MarketDataProvider {
   return {
-    id: "akshare",
+    id: "eastmoney",
 
     async listInstruments(): Promise<Instrument[]> {
       try {
-        const values = await invokeFn("sidecar_list_instruments", {});
-        return (values as SidecarInstrument[]).map(toInstrument);
+        const values = await invokeFn("eastmoney_list_instruments", {});
+        return (values as MarketInstrument[]).map(toInstrument);
       } catch (cause) {
         throw normalizeError(cause);
       }
@@ -113,11 +114,11 @@ export function createAkShareMarketDataProvider(
       limit: number,
     ): Promise<DailyBar[]> {
       try {
-        const values = await invokeFn("sidecar_get_daily_bars", {
+        const values = await invokeFn("eastmoney_get_daily_bars", {
           instrumentId,
           limit,
         });
-        return (values as SidecarBar[]).map(toDailyBar);
+        return (values as MarketBar[]).map(toDailyBar);
       } catch (cause) {
         throw normalizeError(cause);
       }
@@ -125,5 +126,5 @@ export function createAkShareMarketDataProvider(
   };
 }
 
-export const akshareMarketDataProvider: MarketDataProvider =
-  createAkShareMarketDataProvider();
+export const eastMoneyMarketDataProvider: MarketDataProvider =
+  createEastMoneyMarketDataProvider();

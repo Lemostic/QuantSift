@@ -79,7 +79,7 @@ export function HomePage() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<DataSourceId>("akshare");
+  const [dataSource, setDataSource] = useState<DataSourceId>("eastmoney");
   const [fellBack, setFellBack] = useState(false);
   /** True while the visible result was rendered from the local bar cache. */
   const [servedFromCache, setServedFromCache] = useState(false);
@@ -122,7 +122,7 @@ export function HomePage() {
         },
       });
       setRecommendations(result.recommendations);
-      setDataSource(provider.id === "akshare" ? "akshare" : "recorded");
+      setDataSource(provider.id === "eastmoney" ? "eastmoney" : "recorded");
       setFellBack(false);
       setServedFromCache(result.meta.servedFrom === "cache");
       const latestTradeDate = result.meta.states.reduce<string | null>(
@@ -292,7 +292,7 @@ export function HomePage() {
                   className="mt-0.5 shrink-0 text-accent-amber sm:mt-0"
                 />
                 <p className="text-[11px] leading-4 text-foreground-muted sm:text-xs">
-                  AKShare 数据源暂不可用，已回退到离线样例行情。显示的数据用于验证研究流程，不构成交易依据。
+                  东方财富数据源暂不可用，已回退到离线样例行情。显示的数据用于验证研究流程，不构成交易依据。
                 </p>
               </div>
               <Badge variant="outline" className="hidden shrink-0 font-mono text-[9px] sm:inline-flex">
@@ -400,7 +400,7 @@ function DashboardHeader({
   degraded: boolean;
   onRefresh: () => void;
 }) {
-  const sourceLabel = `${dataSource === "akshare" ? "AKSHARE" : "RECORDED"} · ${
+  const sourceLabel = `${dataSource === "eastmoney" ? "EASTMONEY" : "RECORDED"} · ${
     servedFromCache ? "CACHE" : fellBack ? "FIXTURE" : "LIVE"
   }`;
   return (

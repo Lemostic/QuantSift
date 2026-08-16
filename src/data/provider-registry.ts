@@ -1,26 +1,26 @@
 import type { MarketDataProvider } from "./market-data-provider";
-import { akshareMarketDataProvider } from "./akshare-provider";
+import { eastMoneyMarketDataProvider } from "./eastmoney-provider";
 import { recordedMarketDataProvider } from "./recorded-provider";
 import { loadRecommendations } from "./recommendation-service";
 import type { Recommendation } from "@/quant/types";
 import { useAppStore } from "@/store/app-store";
 
-export type DataSourceId = "akshare" | "recorded";
+export type DataSourceId = "eastmoney" | "recorded";
 
 /**
  * Registers the providers available to the application.
  *
- * The AKShare sidecar is the live source; the recorded fixture is the
- * offline fixture keeps tests deterministic and can be explicitly selected.
- * Fallback is handled only by `loadWithFallback`, which reports the actual
- * source to prevent callers from mixing live and fixture data silently.
+ * The native EastMoney provider is the live source; the recorded fixture
+ * keeps tests deterministic and can be explicitly selected. Fallback is
+ * handled only by `loadWithFallback`, which reports the actual source to
+ * prevent callers from mixing live and fixture data silently.
  */
 export class ProviderRegistry {
   private providers: Record<DataSourceId, MarketDataProvider>;
 
   constructor(providers: Partial<Record<DataSourceId, MarketDataProvider>> = {}) {
     this.providers = {
-      akshare: providers.akshare ?? akshareMarketDataProvider,
+      eastmoney: providers.eastmoney ?? eastMoneyMarketDataProvider,
       recorded: providers.recorded ?? recordedMarketDataProvider,
     };
   }
@@ -44,11 +44,12 @@ export interface LoadResult {
 }
 
 /**
- * Load recommendations preferring AKShare, falling back to recorded fixtures.
+ * Load recommendations preferring EastMoney, falling back to recorded
+ * fixtures.
  */
 export async function loadWithFallback(
   instrumentIds: string[],
-  preferred: DataSourceId = "akshare",
+  preferred: DataSourceId = "eastmoney",
   allowOfflineFallback = true,
   providerRegistry: ProviderRegistry = registry,
 ): Promise<LoadResult> {
@@ -67,16 +68,16 @@ export async function loadWithFallback(
 
   try {
     const recommendations = await loadRecommendations(
-      providerRegistry.provider("akshare"),
+      providerRegistry.provider("eastmoney"),
       instrumentIds,
     );
-    return { recommendations, source: "akshare", fellBack: false, error: null };
+    return { recommendations, source: "eastmoney", fellBack: false, error: null };
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
     if (!allowOfflineFallback) {
       return {
         recommendations: [],
-        source: "akshare",
+        source: "eastmoney",
         fellBack: false,
         error: message,
       };
