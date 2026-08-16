@@ -21,3 +21,13 @@ __pycache__
 test-results
 playwright-report
 blob-report
+
+# 密钥与凭据 —— 死命令：永不提交（只允许存在于本机 localStorage）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+secrets*.json
+credentials*

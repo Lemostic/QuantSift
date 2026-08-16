@@ -91,6 +91,10 @@ try {
         -Executable "pnpm" `
         -Arguments @("install", "--frozen-lockfile")
     Invoke-CheckedCommand `
+        -Label "Scan for secrets (dead rule)" `
+        -Executable "powershell" `
+        -Arguments @("-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $PSScriptRoot "scan-secrets.ps1"), "-All")
+    Invoke-CheckedCommand `
         -Label "Run tests" `
         -Executable "pnpm" `
         -Arguments @("test")

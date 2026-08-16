@@ -1,0 +1,26 @@
+#!/bin/sh
+# 提交前密钥扫描（死命令：密钥永不入库）。
+# 通过 git config core.hooksPath .githooks 启用；扫描不过则中止提交。
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+SCANNER="$ROOT/scripts/scan-secrets.ps1"
+
+if command -v powershell >/dev/null 2>&1; then
+  powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$SCANNER"
+  exit $?
+fi
+
+# 无 PowerShell 时的兜底：对暂存文件做 grep 扫描。
+STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
+if [ -n "$STAGED" ]; then
+  HIT="$(printf '%s\n' "$STAGED" | grep -vE '^(node_modules|target|dist|sidecar)' | xargs -r grep -nE 'sk-[A-Za-z0-9_-]{16,}|tvly-[A-Za-z0-9_-]{16,}|Bearer[[:space:]]+[A-Za-z0-9._~+/=-]{20,}|-----BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY-----' 2>/dev/null || true)"
+  if [ -n "$HIT" ]; then
+    echo "!! 检测到疑似密钥内容，已阻止提交（死命令：密钥永不入库）!!" >&2
+    echo "$HIT" >&2
+    exit 1
+  fi
+fi
+
+echo "密钥扫描通过：暂存文件未发现疑似密钥。"
+exit 0

@@ -25,6 +25,27 @@ factors. It does not promise returns or place trades.
 - Keep API credentials and phone numbers local. Never commit secrets.
 - Treat recommendations as research signals, not trading instructions.
 
+## Secrets Guard（死命令，任何情况下不可违反）
+
+**用户的 AI 模型 Key、网络搜索 Key 等一切密钥，只允许存在于本机
+localStorage（浏览器/WebView 本地存储），严禁进入 Git 仓库、提交记录、
+代码、文档、测试夹具、e2e mock、日志或任何被跟踪的文件。**
+
+- 每次提交前必须通过密钥扫描：
+  - 本仓库已配置 `core.hooksPath = .githooks`，pre-commit 钩子自动扫描
+    暂存文件（PowerShell 不可用时走 grep 兜底）；
+  - `scripts/scan-secrets.ps1` 可手动运行：默认扫暂存区，`-All` 扫全树；
+  - `build-windows.ps1` 打包流水线内置全树密钥扫描，命中即构建失败。
+- 密钥相关约定：
+  - 测试只允许使用显式假密钥（如 `test-key` / `sk-test-...`），禁止把真实
+    Key 粘贴进任何文件后再提交；
+  - 用户在偏好页填写的 Key 存于 zustand persist（localStorage），随
+    `partialize` 持久化，不经过 Tauri/Rust 侧持久化；
+  - `.gitignore` 已忽略 `.env*`、`*.pem`、`*.key`、`secrets*.json`、
+    `credentials*` 等常见凭据文件。
+- 若扫描命中疑似密钥：立即中止操作，确认内容是测试假值或移除真实密钥后
+  再继续。任何“只是临时提交一下”的例外都不允许。
+
 ## Public Test Seams
 
 - `MarketDataProvider`
