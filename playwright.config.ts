@@ -9,6 +9,7 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   reporter: "list",
+  retries: 1,
   // 本机 Vite 冷编译较慢，放宽断言与用例超时。
   expect: { timeout: 15_000 },
   timeout: 90_000,

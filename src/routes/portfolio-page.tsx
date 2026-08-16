@@ -31,6 +31,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MarketChartDialog } from "@/components/market-chart/market-chart-dialog";
+import { GlossaryText } from "@/components/glossary/term-tooltip";
 import { PAGE_CONTAINER_CLASS } from "@/lib/spacing";
 import { cn } from "@/lib/utils";
 
@@ -412,7 +413,9 @@ function PortfolioMetric({
       )}
     >
       <div className="flex items-center justify-between gap-2 text-[9px] text-foreground-muted sm:text-[10px]">
-        <span>{label}</span>
+        <span>
+          <GlossaryText text={label} />
+        </span>
         <Icon size={14} className="text-primary" />
       </div>
       <div
@@ -747,7 +750,9 @@ function NumberField({
 }) {
   return (
     <label>
-      <span className="text-[10px] font-medium">{label}</span>
+      <span className="text-[10px] font-medium">
+        <GlossaryText text={label} />
+      </span>
       <input
         type="number"
         value={value}

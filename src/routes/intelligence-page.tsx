@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { GlossaryText } from "@/components/glossary/term-tooltip";
 import { PAGE_CONTAINER_CLASS } from "@/lib/spacing";
 import { useWatchlist } from "@/watchlist/use-watchlist";
 import {
@@ -377,7 +378,7 @@ function SessionDetail({
           <div>
             <div className="flex items-center gap-2 text-[10px] font-semibold">
               <Clock size={13} className="text-primary" />
-              随机因子（种子 {session.seed}）
+              <GlossaryText text="随机因子" />（种子 {session.seed}）
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {session.factorVariation.length > 0 ? (
@@ -498,7 +499,7 @@ function MemoryPanel({ sessions }: { sessions: AnalysisSession[] }) {
     <div>
       <div className="flex items-center gap-2 text-[10px] font-semibold">
         <Clock size={13} className="text-primary" />
-        历史记忆（同标的 {sessions.length} 条）
+        <GlossaryText text="历史记忆" />（同标的 {sessions.length} 条）
       </div>
       <div className="mt-2 space-y-1.5">
         {sessions.map((session) => {

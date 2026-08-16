@@ -32,6 +32,11 @@ const IntelligencePage = lazy(() =>
     default: module.IntelligencePage,
   })),
 );
+const GlossaryPage = lazy(() =>
+  import("@/routes/glossary-page").then((module) => ({
+    default: module.GlossaryPage,
+  })),
+);
 const PreferencesPage = lazy(() =>
   import("@/routes/preferences-page").then((module) => ({
     default: module.PreferencesPage,
@@ -53,6 +58,7 @@ const router = createBrowserRouter([
       { path: "portfolio", element: <PortfolioPage /> },
       { path: "backtest", element: <BacktestPage /> },
       { path: "intelligence", element: <IntelligencePage /> },
+      { path: "glossary", element: <GlossaryPage /> },
       { path: "scans", element: <ScansPage /> },
       { path: "alerts", element: <AlertsPage /> },
       { path: "modules/preferences", element: <PreferencesPage /> },

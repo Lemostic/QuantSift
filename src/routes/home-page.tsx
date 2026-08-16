@@ -41,6 +41,7 @@ import type { ScanRun } from "@/scans/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { GlossaryText } from "@/components/glossary/term-tooltip";
 import { PAGE_CONTAINER_CLASS } from "@/lib/spacing";
 import { MarketChartDialog } from "@/components/market-chart/market-chart-dialog";
 import { ProfessionalMarketChart } from "@/components/market-chart/professional-market-chart";
@@ -528,9 +529,7 @@ function MetricStrip({
             )}
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[10px] text-foreground-muted sm:text-[11px]">
-                {item.label}
-              </span>
+              <GlossaryText text={item.label} className="text-[10px] text-foreground-muted sm:text-[11px]" />
               <Icon size={15} className="text-primary" />
             </div>
             <div className="mt-1.5 truncate font-mono text-xl font-semibold sm:text-2xl">
@@ -729,7 +728,7 @@ function ChartWorkspace({
             <span className="ml-1 text-[10px] font-normal text-foreground-subtle">/ 100</span>
           </div>
           <div className="hidden text-[9px] text-foreground-subtle lg:mt-1 lg:block">
-            趋势、动量、风险加权
+            <GlossaryText text="趋势、动量、风险加权" />
           </div>
         </div>
       </div>
@@ -874,7 +873,7 @@ function ResearchInspector({
           {recommendation.factors.map((factor) => (
             <div key={factor.key}>
               <div className="flex items-center justify-between gap-3 text-[10px]">
-                <span className="text-foreground-muted">{factor.label}</span>
+                <GlossaryText text={factor.label} className="text-foreground-muted" />
                 <span className="font-mono font-semibold">{factor.score}</span>
               </div>
               <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
@@ -887,7 +886,7 @@ function ResearchInspector({
                 />
               </div>
               <div className="mt-1 truncate font-mono text-[8px] text-foreground-subtle">
-                {factor.detail} · 权重 {Math.round(factor.weight * 100)}%
+                <GlossaryText text={factor.detail} /> · 权重 {Math.round(factor.weight * 100)}%
               </div>
             </div>
           ))}
@@ -973,8 +972,12 @@ function IntelligencePanel({
           <div className="mt-0.5 text-[9px] text-foreground-muted">{confidenceLabel}</div>
         </div>
         <div className="text-right font-mono text-[8px] text-foreground-subtle">
-          <div>因子 {intelligence.factorConsensus}</div>
-          <div className="mt-1">稳定 {intelligence.signalStability}</div>
+          <div>
+            <GlossaryText text="因子一致性" /> {intelligence.factorConsensus}
+          </div>
+          <div className="mt-1">
+            <GlossaryText text="信号稳定度" /> {intelligence.signalStability}
+          </div>
         </div>
       </div>
       <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
@@ -991,8 +994,12 @@ function IntelligencePanel({
         {intelligence.actionSummary}
       </p>
       <div className="mt-2 flex items-center justify-between border-t border-border/70 pt-2 font-mono text-[8px] text-foreground-subtle">
-        <span>支撑 {intelligence.support}</span>
-        <span>压力 {intelligence.resistance}</span>
+        <span>
+          <GlossaryText text="支撑位" /> {intelligence.support}
+        </span>
+        <span>
+          <GlossaryText text="压力位" /> {intelligence.resistance}
+        </span>
       </div>
     </div>
   );
@@ -1019,7 +1026,7 @@ function ReasonColumn({
                 tone === "positive" ? "bg-accent-emerald" : "bg-accent-amber",
               )}
             />
-            {item}
+            <GlossaryText text={item} />
           </li>
         ))}
       </ul>
