@@ -540,10 +540,10 @@ function MonitorToggle({
     >
       <motion.span
         layout
-        animate={{ x: enabled ? 17 : 2 }}
+        animate={{ x: enabled ? 16 : 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 24 }}
         className={cn(
-          "absolute top-0.5 h-3.5 w-3.5 rounded-full",
+          "absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full",
           enabled ? "bg-primary" : "bg-foreground-subtle",
         )}
       />

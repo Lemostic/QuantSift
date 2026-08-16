@@ -53,6 +53,7 @@ Do not depend on live financial endpoints in the test suite.
 
 ```powershell
 pnpm test
+pnpm test:e2e
 pnpm lint
 pnpm build
 pnpm tauri dev
@@ -62,6 +63,15 @@ pnpm tauri build
 On this workstation, Smart App Control currently blocks unsigned Rust build
 artifacts. `build-windows.cmd` detects the condition and guides the user to the
 supported Windows setting before packaging.
+
+## Browser Verification
+
+Playwright (`@playwright/test`) verifies UI behavior in a real browser.
+`pnpm test:e2e` boots the Vite dev server (`e2e/` specs, config in
+`playwright.config.ts`); pages degrade to the recorded-fixture data source
+when the Tauri bridge is absent, so specs stay deterministic. Use it to
+validate fixes that a screenshot would catch — layout geometry, focus
+states, empty/error states — before shipping UI changes.
 
 ## Packaging Requirement
 
