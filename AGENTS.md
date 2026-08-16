@@ -63,6 +63,19 @@ On this workstation, Smart App Control currently blocks unsigned Rust build
 artifacts. `build-windows.cmd` detects the condition and guides the user to the
 supported Windows setting before packaging.
 
+## Packaging Requirement
+
+Every development completion — feature, fix, or iteration — MUST end with:
+
+1. `pnpm test` and `pnpm lint` passing,
+2. `pnpm build` (frontend production build) passing,
+3. the Windows installer packaged via `pnpm tauri build` (or
+   `build-windows.cmd`), with the artifacts verified under
+   `src-tauri\target\release\bundle\`.
+
+Report the installer path in the delivery summary. This is a standing user
+requirement; do not consider work finished until the installer exists.
+
 ## Git Delivery
 
 - Keep commits scoped to one vertical feature.
