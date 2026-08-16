@@ -2,7 +2,7 @@ import type { MarketDataProvider } from "@/data/market-data-provider";
 import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
 import { buildRecommendation } from "@/quant/recommendation";
 import type { DailyBar, Instrument, Recommendation } from "@/quant/types";
-import { parseAdviceReply, buildConsensus } from "./consensus";
+import { parseAdviceReply, buildConsensus, buildCompositeReport } from "./consensus";
 import { buildFactorVariation } from "./factors";
 import { buildAnalysisMessages } from "./prompt";
 import type {
@@ -104,6 +104,12 @@ export async function runAnalysis(
     request.providers.map((config) => runProvider(config, request.llm, messages)),
   );
   const advice = buildConsensus(outcomes);
+  const intelligence = buildSignalIntelligence(request.recommendation, request.bars);
+  const report = buildCompositeReport({
+    outcomes,
+    recommendation: request.recommendation,
+    intelligence,
+  });
 
   const session: AnalysisSession = {
     id: createId(),
@@ -118,6 +124,7 @@ export async function runAnalysis(
     research,
     providers: outcomes,
     advice,
+    report,
     messages: [
       {
         id: createId(),

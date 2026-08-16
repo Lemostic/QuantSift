@@ -88,6 +88,7 @@ pub fn run() {
             app_info,
             market::eastmoney_list_instruments,
             market::eastmoney_get_daily_bars,
+            market::eastmoney_search_instruments,
             ai::llm_chat_completion
         ])
         .run(tauri::generate_context!())

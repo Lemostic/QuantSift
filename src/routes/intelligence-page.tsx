@@ -320,15 +320,19 @@ function SessionDetail({
 
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
         <div className="min-w-0 space-y-4">
-          <div className="rounded-md border border-border/70 bg-background/40 p-3">
-            <div className="flex items-center gap-2 text-[10px] font-semibold">
-              <Sparkle size={13} className="text-primary" />
-              结论摘要
+          {session.report ? (
+            <CompositeReportView session={session} />
+          ) : (
+            <div className="rounded-md border border-border/70 bg-background/40 p-3">
+              <div className="flex items-center gap-2 text-[10px] font-semibold">
+                <Sparkle size={13} className="text-primary" />
+                结论摘要
+              </div>
+              <p className="mt-1.5 whitespace-pre-wrap text-[11px] leading-5 text-foreground-muted">
+                {session.advice.summary}
+              </p>
             </div>
-            <p className="mt-1.5 whitespace-pre-wrap text-[11px] leading-5 text-foreground-muted">
-              {session.advice.summary}
-            </p>
-          </div>
+          )}
 
           <div>
             <div className="flex items-center gap-2 text-[10px] font-semibold">
@@ -441,8 +445,113 @@ function SessionDetail({
   );
 }
 
-function ProviderCard({ outcome }: { outcome: ProviderOutcome }) {
-  if (outcome.status === "error") {
+function CompositeReportView({ session }: { session: AnalysisSession }) {
+  const report = session.report!;
+  const meta = SIGNAL_META[report.signal];
+  const okCount = session.providers.filter(
+    (provider) => provider.status === "ok",
+  ).length;
+
+  return (
+    <div className="space-y-3">
+      {/* 明确结论 */}
+      <div className="rounded-md border border-primary/25 bg-primary/[0.06] p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-[10px] font-semibold">
+            <Sparkle size={13} className="text-primary" />
+            组合分析结论
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className={cn("text-[9px]", meta.className)}>
+              {meta.label} · 置信度 {report.confidence}/100
+            </Badge>
+            <span className="font-mono text-[8px] text-foreground-subtle">
+              {okCount}/{session.providers.length} 模型有效
+            </span>
+          </div>
+        </div>
+        <p className="mt-2 text-xs font-medium leading-5">{report.verdict}</p>
+      </div>
+
+      {/* 为什么：核心依据 */}
+      <div>
+        <div className="flex items-center gap-2 text-[10px] font-semibold">
+          <Robot size={13} className="text-primary" />
+          为什么（核心依据）
+        </div>
+        <ul className="mt-1.5 space-y-1">
+          {report.rationale.map((point, index) => (
+            <li
+              key={index}
+              className="flex gap-2 text-[10px] leading-4 text-foreground-muted"
+            >
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary" />
+              <GlossaryText text={point} />
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* 模型分歧 */}
+      <div>
+        <div className="flex items-center gap-2 text-[10px] font-semibold">
+          <Brain size={13} className="text-primary" />
+          模型分歧
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {(Object.entries(report.signalDistribution) as Array<
+            [AdviceSignal, number]
+          >).map(([signal, count]) => (
+            <span
+              key={signal}
+              className={cn(
+                "rounded-full border px-2 py-0.5 font-mono text-[9px]",
+                count > 0 ? "border-border/70 text-foreground-muted" : "opacity-30",
+              )}
+            >
+              {SIGNAL_META[signal].label} {count}
+            </span>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[10px] leading-4 text-foreground-muted">
+          {report.disagreement}
+        </p>
+      </div>
+
+      {/* 风险提示 */}
+      <div>
+        <div className="flex items-center gap-2 text-[10px] font-semibold">
+          <Warning size={13} className="text-primary" />
+          风险提示
+        </div>
+        <ul className="mt-1.5 space-y-1">
+          {report.risks.map((risk, index) => (
+            <li
+              key={index}
+              className="flex gap-2 text-[10px] leading-4 text-foreground-muted"
+            >
+              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-accent-amber" />
+              <GlossaryText text={risk} />
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* 操作建议 */}
+      <div className="rounded-md border border-accent-amber/25 bg-accent-amber/[0.04] px-3 py-2.5">
+        <div className="flex items-center gap-2 text-[10px] font-semibold">
+          <Lightning size={13} className="text-accent-amber" />
+          操作建议（研究层面）
+        </div>
+        <p className="mt-1 text-[11px] leading-5 text-foreground-muted">
+          {report.action}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function ProviderCard({ outcome }: { outcome: ProviderOutcome }) {  if (outcome.status === "error") {
     return (
       <div className="rounded-md border border-accent-rose/30 bg-accent-rose/[0.04] px-3 py-2">
         <div className="flex items-center justify-between gap-2">

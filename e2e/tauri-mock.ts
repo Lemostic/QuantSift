@@ -30,6 +30,17 @@ export async function installTauriMock(page: Page): Promise<void> {
             const limit = Number(args?.limit ?? 30);
             return list.slice(-limit);
           }
+          if (cmd === "eastmoney_search_instruments") {
+            const keyword = String(args?.keyword ?? "").toLowerCase().trim();
+            return (instruments as Array<{
+              name: string;
+              symbol: string;
+            }>).filter(
+              (instrument) =>
+                instrument.name.toLowerCase().includes(keyword) ||
+                instrument.symbol.includes(keyword),
+            );
+          }
           throw new Error(`mock: unknown command ${cmd}`);
         },
       };

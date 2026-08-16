@@ -116,6 +116,9 @@ export function createCachedMarketDataProvider(
     async getDailyBars(instrumentId: string, limit: number): Promise<DailyBar[]> {
       return (await getDailyBarsCached(instrumentId, limit)).bars;
     },
+    async searchInstruments(query: string): Promise<Instrument[]> {
+      return base.searchInstruments ? base.searchInstruments(query) : [];
+    },
     getDailyBarsCached,
   };
 }

@@ -9,6 +9,7 @@
 pub mod catalog;
 pub mod client;
 pub mod parse;
+pub mod search;
 
 use serde::Serialize;
 use std::sync::OnceLock;
@@ -19,12 +20,12 @@ use parse::{parse_fund_nav_response, parse_kline_response};
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketInstrument {
-    pub id: &'static str,
-    pub symbol: &'static str,
-    pub name: &'static str,
-    pub kind: &'static str,
-    pub exchange: &'static str,
-    pub currency: &'static str,
+    pub id: String,
+    pub symbol: String,
+    pub name: String,
+    pub kind: String,
+    pub exchange: String,
+    pub currency: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -93,14 +94,21 @@ pub fn eastmoney_list_instruments() -> Vec<MarketInstrument> {
     catalog::CATALOG
         .iter()
         .map(|entry| MarketInstrument {
-            id: entry.id,
-            symbol: entry.symbol,
-            name: entry.name,
-            kind: entry.kind,
-            exchange: entry.exchange,
-            currency: entry.currency,
+            id: entry.id.to_string(),
+            symbol: entry.symbol.to_string(),
+            name: entry.name.to_string(),
+            kind: entry.kind.to_string(),
+            exchange: entry.exchange.to_string(),
+            currency: entry.currency.to_string(),
         })
         .collect()
+}
+
+#[tauri::command]
+pub async fn eastmoney_search_instruments(
+    keyword: String,
+) -> Result<Vec<MarketInstrument>, String> {
+    search::search_instruments(keyword).await
 }
 
 #[tauri::command]

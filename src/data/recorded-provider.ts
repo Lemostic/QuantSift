@@ -69,4 +69,13 @@ export const recordedMarketDataProvider: MarketDataProvider = {
   async getDailyBars(instrumentId, limit) {
     return makeBars(instrumentId).slice(-limit);
   },
+  async searchInstruments(query) {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return instruments;
+    return instruments.filter(
+      (instrument) =>
+        instrument.name.toLowerCase().includes(normalized) ||
+        instrument.symbol.includes(normalized),
+    );
+  },
 };

@@ -50,6 +50,8 @@ const signalMeta: Record<
 export function WatchlistPage() {
   const watchlist = useWatchlist();
   const [catalog, setCatalog] = useState<Instrument[]>([]);
+  const [searchResults, setSearchResults] = useState<Instrument[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [query, setQuery] = useState("");
   const [monitorQuery, setMonitorQuery] = useState("");
@@ -62,6 +64,38 @@ export function WatchlistPage() {
       setActionError(cause instanceof Error ? cause.message : String(cause));
     });
   }, []);
+
+  // 实时全市场搜索（防抖 300ms）：空查询时回退默认目录。
+  useEffect(() => {
+    const keyword = query.trim();
+    if (!keyword) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSearchLoading(true);
+    const timer = window.setTimeout(() => {
+      const provider = configuredProvider();
+      const task = provider.searchInstruments
+        ? provider.searchInstruments(keyword)
+        : Promise.resolve([]);
+      task
+        .then((results) => {
+          if (!cancelled) setSearchResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setSearchResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
 
   const entryIds = useMemo(
     () => new Set(watchlist.entries.map((entry) => entry.instrumentId)),
@@ -112,16 +146,10 @@ export function WatchlistPage() {
   }, [entryIdsKey, selectedId, watchlist.entries]);
 
   const candidates = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return catalog.filter((instrument) => {
-      if (entryIds.has(instrument.id)) return false;
-      if (!normalized) return true;
-      return (
-        instrument.name.toLowerCase().includes(normalized) ||
-        instrument.symbol.includes(normalized)
-      );
-    });
-  }, [catalog, entryIds, query]);
+    // 有输入时用实时搜索结果，否则展示默认目录。
+    const source = query.trim() ? searchResults : catalog;
+    return source.filter((instrument) => !entryIds.has(instrument.id));
+  }, [catalog, searchResults, entryIds, query]);
 
   const visibleEntries = useMemo(() => {
     const normalized = monitorQuery.trim().toLowerCase();
@@ -311,15 +339,21 @@ export function WatchlistPage() {
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="输入代码或名称"
+                  placeholder="搜索全市场：代码或名称"
                   className="h-8 w-full border border-input bg-background pl-8 pr-3 text-[11px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
                 />
               </div>
             </div>
             <div className="max-h-56 divide-y divide-border/70 overflow-y-auto">
-              {candidates.length === 0 ? (
+              {searchLoading ? (
                 <div className="px-4 py-7 text-center text-[11px] text-foreground-muted">
-                  没有可添加的匹配标的
+                  正在搜索全市场…
+                </div>
+              ) : candidates.length === 0 ? (
+                <div className="px-4 py-7 text-center text-[11px] text-foreground-muted">
+                  {query.trim()
+                    ? "没有找到匹配的标的，试试输入代码（如 600519）或名称"
+                    : "输入代码或名称搜索全市场（A 股 / ETF / 场外基金）"}
                 </div>
               ) : (
                 candidates.map((instrument) => (

@@ -123,6 +123,17 @@ export function createEastMoneyMarketDataProvider(
         throw normalizeError(cause);
       }
     },
+
+    async searchInstruments(query: string): Promise<Instrument[]> {
+      try {
+        const values = await invokeFn("eastmoney_search_instruments", {
+          keyword: query,
+        });
+        return (values as MarketInstrument[]).map(toInstrument);
+      } catch (cause) {
+        throw normalizeError(cause);
+      }
+    },
   };
 }
 

@@ -24,6 +24,7 @@ function session(
     research: [],
     providers: [],
     advice: { signal: "watch", confidence: 50, summary: "s" },
+    report: null,
     messages: [],
     priceAtAnalysis: 10,
     baseScore: 60,

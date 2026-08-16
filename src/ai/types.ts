@@ -105,6 +105,24 @@ export interface AnalysisAdvice {
   summary: string;
 }
 
+/** 多模型合并后的组合分析报告。 */
+export interface CompositeReport {
+  signal: AdviceSignal;
+  confidence: number;
+  /** 明确结论：是否应该买入/卖出。 */
+  verdict: string;
+  /** 为什么：多模型共识依据（分点）。 */
+  rationale: string[];
+  /** 各信号票数分布。 */
+  signalDistribution: Record<AdviceSignal, number>;
+  /** 模型分歧说明。 */
+  disagreement: string;
+  /** 风险提示（基础因子 + 模型提示合并去重）。 */
+  risks: string[];
+  /** 结合支撑/压力位的操作建议。 */
+  action: string;
+}
+
 export interface AnalysisSession {
   id: string;
   instrumentId: string;
@@ -116,10 +134,12 @@ export interface AnalysisSession {
   seed: number;
   factorTagIds: string[];
   factorVariation: FactorVariationEntry[];
-  /** 网络研究简报（本地留存）。 */
+  /** 研究简报（本地留存）。 */
   research: ResearchBrief[];
   providers: ProviderOutcome[];
   advice: AnalysisAdvice;
+  /** 多模型合并后的组合分析报告。 */
+  report: CompositeReport | null;
   messages: AnalysisMessage[];
   priceAtAnalysis: number;
   baseScore: number;
