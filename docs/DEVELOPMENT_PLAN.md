@@ -329,6 +329,51 @@ Acceptance criteria:
 - `pnpm test`, `pnpm lint`, `cargo test --lib`, and the frontend build all
   pass.
 
+## Slice 10-13: AI Intelligence Workbench (v0.7.0)
+
+Status: implemented.
+
+Goal: turn the research desk into a scheduled, AI-assisted analysis
+workbench with clear buy/sell marks on the home chart, multi-model LLM
+advice, intraday auto scans, and persisted conversation sessions.
+
+Deliverables:
+
+- Slice 10 (chart): `buildSellTimingMarkers` mirrors the buy rules
+  (trend breakdown, MA5 down-cross, momentum reversal, overextended
+  rollover); rose sell annotations render beside emerald buy marks on the
+  home chart and fullscreen dialog; the marker strip lists both sides.
+- Slice 11 (AI engine): Rust `llm_chat_completion` (OpenAI-compatible,
+  keys travel per call) and `web_search_tavily`; TS domain with factor
+  tags (global/domestic/policy/capital/news/technical/macro/industry,
+  checkbox config, seeded mulberry32 variation), web research seam
+  (offline + Tavily), prompt builder with session memory, parallel
+  multi-provider analysis with consensus, versioned session repository
+  (cap 500) with time-dimension filters, deterministic intraday
+  scheduler (workday 09:00–15:00 interval slots, once per slot).
+- Slice 12 (watchlist): `autoAnalyze` per-instrument opt-in with safe v3
+  hydration.
+- Slice 13 (UI): `/intelligence` workbench (session list + conversation
+  detail + memory panel), preferences groups (AI providers, factor tags,
+  research, intraday schedule), AppShell auto-scan wiring, app-store v8
+  migration.
+
+Public test seams:
+
+- `buildSellTimingMarkers`, `buildFactorVariation`, `getDueIntradayScan`
+- `runAnalysis` / `runIntelligentScan`, `buildConsensus`
+- `AnalysisSessionStore` (local repository), `filterSessionsByDimension`
+
+Acceptance criteria:
+
+- Same seed + same inputs → identical factor variation and analysis.
+- A provider failure never blocks other providers or the session.
+- Sessions (research briefs, seeds, provider outcomes) persist locally
+  and are viewable by time dimension.
+- Scheduler fires at most once per interval slot on workdays only.
+- All unit tests, lint, production build, and e2e pass; installer
+  packaged (standing requirement).
+
 ## Later Slices
 
 - SQLite adapter for `BarCacheStore` and cache size management.
