@@ -344,13 +344,16 @@ Deliverables:
   rollover); rose sell annotations render beside emerald buy marks on the
   home chart and fullscreen dialog; the marker strip lists both sides.
 - Slice 11 (AI engine): Rust `llm_chat_completion` (OpenAI-compatible,
-  keys travel per call) and `web_search_tavily`; TS domain with factor
-  tags (global/domestic/policy/capital/news/technical/macro/industry,
-  checkbox config, seeded mulberry32 variation), web research seam
-  (offline + Tavily), prompt builder with session memory, parallel
-  multi-provider analysis with consensus, versioned session repository
-  (cap 500) with time-dimension filters, deterministic intraday
-  scheduler (workday 09:00–15:00 interval slots, once per slot).
+  keys travel per call); TS domain with factor tags
+  (global/domestic/policy/capital/news/technical/macro/industry,
+  checkbox config, seeded mulberry32 variation), offline research briefs
+  behind a `WebResearchProvider` seam (future search sources can plug in
+  without touching the engine), prompt builder with session memory,
+  parallel multi-provider analysis with consensus, versioned session
+  repository (cap 500) with time-dimension filters, deterministic
+  intraday scheduler (workday 09:00–15:00 interval slots, once per
+  slot), and one-click provider presets (DeepSeek / MiniMax intl+cn /
+  OpenAI / Kimi / Qwen / GLM).
 - Slice 12 (watchlist): `autoAnalyze` per-instrument opt-in with safe v3
   hydration.
 - Slice 13 (UI): `/intelligence` workbench (session list + conversation

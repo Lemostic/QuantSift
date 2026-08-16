@@ -88,8 +88,7 @@ pub fn run() {
             app_info,
             market::eastmoney_list_instruments,
             market::eastmoney_get_daily_bars,
-            ai::llm_chat_completion,
-            ai::web_search_tavily
+            ai::llm_chat_completion
         ])
         .run(tauri::generate_context!())
         .expect("error while running QuantSift");

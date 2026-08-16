@@ -116,72 +116,6 @@ pub async fn llm_chat_completion(
     })
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WebSearchResult {
-    pub title: String,
-    pub url: String,
-    pub snippet: String,
-    pub score: Option<f64>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TavilyResponse {
-    results: Vec<TavilyResult>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TavilyResult {
-    title: String,
-    url: String,
-    content: String,
-    score: Option<f64>,
-}
-
-#[tauri::command]
-pub async fn web_search_tavily(
-    query: String,
-    api_key: String,
-    max_results: Option<u32>,
-) -> Result<Vec<WebSearchResult>, String> {
-    let client = crate::market::client::build_client().map_err(|err| err.to_string())?;
-    let body = serde_json::json!({
-        "query": query,
-        "max_results": max_results.unwrap_or(5),
-        "search_depth": "basic",
-    });
-    let response = client
-        .post("https://api.tavily.com/search")
-        .json(&body)
-        .timeout(std::time::Duration::from_secs(30))
-        .send()
-        .await
-        .map_err(|err| format!("网络请求失败: {err}"))?;
-    let status = response.status();
-    let text = response
-        .text()
-        .await
-        .map_err(|err| format!("网络请求失败: {err}"))?;
-    if !status.is_success() {
-        return Err(format!(
-            "搜索接口错误: HTTP {status} — {}",
-            text.chars().take(300).collect::<String>()
-        ));
-    }
-    let parsed: TavilyResponse = serde_json::from_str(&text)
-        .map_err(|err| format!("搜索响应解析失败: {err}"))?;
-    Ok(parsed
-        .results
-        .into_iter()
-        .map(|result| WebSearchResult {
-            title: result.title,
-            url: result.url,
-            snippet: result.content,
-            score: result.score,
-        })
-        .collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,19 +147,5 @@ mod tests {
         let body = r#"{"choices": [], "model": "x"}"#;
         let parsed: ChatCompletionResponse = serde_json::from_str(body).expect("parses");
         assert!(parsed.choices.is_empty());
-    }
-
-    #[test]
-    fn parses_tavily_response() {
-        let body = r#"{
-          "query": "茅台 政策",
-          "results": [
-            { "title": "消息一", "url": "https://example.com/1", "content": "摘要内容", "score": 0.95 }
-          ]
-        }"#;
-        let parsed: TavilyResponse = serde_json::from_str(body).expect("valid body");
-        assert_eq!(parsed.results.len(), 1);
-        assert_eq!(parsed.results[0].title, "消息一");
-        assert_eq!(parsed.results[0].score, Some(0.95));
     }
 }

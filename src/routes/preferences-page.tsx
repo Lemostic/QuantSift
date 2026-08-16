@@ -44,6 +44,10 @@ import {
   type IntradaySchedule,
   type LlmProviderConfig,
 } from "@/ai/types";
+import {
+  LLM_PROVIDER_PRESETS,
+  presetById,
+} from "@/ai/provider-presets";
 
 export function PreferencesPage() {
   const contentPadding = useAppStore((s) => s.contentPadding);
@@ -62,10 +66,6 @@ export function PreferencesPage() {
   const setAiProviders = useAppStore((s) => s.setAiProviders);
   const aiFactorConfig = useAppStore((s) => s.aiFactorConfig);
   const setAiFactorConfig = useAppStore((s) => s.setAiFactorConfig);
-  const aiResearchProvider = useAppStore((s) => s.aiResearchProvider);
-  const setAiResearchProvider = useAppStore((s) => s.setAiResearchProvider);
-  const aiResearchApiKey = useAppStore((s) => s.aiResearchApiKey);
-  const setAiResearchApiKey = useAppStore((s) => s.setAiResearchApiKey);
   const aiIntradaySchedule = useAppStore((s) => s.aiIntradaySchedule);
   const setAiIntradaySchedule = useAppStore((s) => s.setAiIntradaySchedule);
 
@@ -107,13 +107,6 @@ export function PreferencesPage() {
       <AiFactorSettings
         config={aiFactorConfig}
         onChange={setAiFactorConfig}
-      />
-
-      <AiResearchSettings
-        provider={aiResearchProvider}
-        apiKey={aiResearchApiKey}
-        onProviderChange={setAiResearchProvider}
-        onApiKeyChange={setAiResearchApiKey}
       />
 
       <AiScheduleSettings
@@ -207,6 +200,8 @@ function LlmProviderSettings({
   providers: LlmProviderConfig[];
   onChange: (providers: LlmProviderConfig[]) => void;
 }) {
+  const [presetId, setPresetId] = useState("deepseek");
+
   const update = (index: number, patch: Partial<LlmProviderConfig>) => {
     onChange(
       providers.map((provider, i) => (i === index ? { ...provider, ...patch } : provider)),
@@ -214,14 +209,16 @@ function LlmProviderSettings({
   };
 
   const addProvider = () => {
+    const preset = presetById(presetId);
+    if (!preset) return;
     onChange([
       ...providers,
       {
         id: `model-${Date.now().toString(36)}`,
-        label: "新模型",
-        baseUrl: "https://api.deepseek.com/v1",
+        label: preset.label,
+        baseUrl: preset.baseUrl,
         apiKey: "",
-        model: "deepseek-chat",
+        model: preset.model,
         enabled: false,
         isDefault: providers.length === 0,
       },
@@ -235,10 +232,37 @@ function LlmProviderSettings({
   return (
     <SettingsGroup
       title="AI 分析模型"
-      description="配置一个或多个 OpenAI 兼容模型（DeepSeek、通义、Moonshot、OpenAI 等）。分析时所有已启用且填写密钥的模型会并行给出结论，最终取共识信号。密钥仅保存在本机，界面显示为掩码。"
+      description="分析结论完全由这些模型给出（DeepSeek、MiniMax、通义、Kimi、OpenAI 等，均走 OpenAI 兼容接口）。选择预设一键填入，粘贴自己的 API Key 并启用即可；多个模型会并行分析后取共识。密钥仅保存在本机，界面掩码显示。"
       icon={<Robot className="h-4 w-4" />}
     >
-      <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={presetId}
+          onChange={(event) => setPresetId(event.target.value)}
+          aria-label="选择模型预设"
+          className="rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs focus:border-primary/50 focus:outline-none"
+        >
+          {LLM_PROVIDER_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.label}
+              {preset.region ? `（${preset.region}）` : ""}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={addProvider}
+          className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-accent"
+        >
+          <Plus size={14} />
+          添加模型
+        </button>
+        <span className="font-mono text-[9px] text-foreground-subtle">
+          {providers.length} 个已配置
+        </span>
+      </div>
+
+      <div className="mt-3 space-y-3">
         {providers.map((provider, index) => (
           <div
             key={provider.id}
@@ -300,14 +324,6 @@ function LlmProviderSettings({
             </div>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={addProvider}
-          className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-accent"
-        >
-          <Plus size={14} />
-          添加模型
-        </button>
       </div>
     </SettingsGroup>
   );
@@ -415,60 +431,6 @@ function AiFactorSettings({
           className="mt-2 h-1 w-full cursor-pointer appearance-none rounded-full bg-border/60 accent-primary"
         />
       </div>
-    </SettingsGroup>
-  );
-}
-
-function AiResearchSettings({
-  provider,
-  apiKey,
-  onProviderChange,
-  onApiKeyChange,
-}: {
-  provider: "offline" | "tavily";
-  apiKey: string;
-  onProviderChange: (provider: "offline" | "tavily") => void;
-  onApiKeyChange: (key: string) => void;
-}) {
-  return (
-    <SettingsGroup
-      title="网络研究"
-      description="分析前先抓取网络研究简报并随会话本地留存，用于提升模型结论的信息量。离线样本无需密钥；Tavily 需要 API Key。"
-      icon={<WifiHigh className="h-4 w-4" />}
-    >
-      <div className="grid gap-2 sm:grid-cols-2">
-        <ProviderOption
-          active={provider === "offline"}
-          icon={<Database size={18} className="text-primary" />}
-          title="离线样本"
-          detail="固定简报，仅用于演示与测试，不依赖网络。"
-          onClick={() => onProviderChange("offline")}
-        />
-        <ProviderOption
-          active={provider === "tavily"}
-          icon={<WifiHigh size={18} className="text-primary" />}
-          title="Tavily 实时搜索"
-          detail="真实网络搜索，需配置 API Key。"
-          onClick={() => onProviderChange("tavily")}
-        />
-      </div>
-      {provider === "tavily" && (
-        <div className="mt-3">
-          <label className="block text-[10px] text-foreground-subtle">
-            Tavily API Key（本地保存）
-          </label>
-          <div className="relative mt-1">
-            <Key size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-foreground-subtle" />
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(event) => onApiKeyChange(event.target.value)}
-              placeholder="tvly-..."
-              className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-7 pr-2 font-mono text-xs focus:border-primary/50 focus:outline-none"
-            />
-          </div>
-        </div>
-      )}
     </SettingsGroup>
   );
 }

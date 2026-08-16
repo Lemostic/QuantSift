@@ -3,12 +3,9 @@ import { configuredProvider } from "@/data/provider-registry";
 import { getBrowserBarCache } from "@/cache/browser-store";
 import { createCachedMarketDataProvider } from "@/cache/cached-provider";
 import { useAppStore } from "@/store/app-store";
-import { defaultInvoke, createInvokeLlmClient } from "./llm";
+import { createInvokeLlmClient } from "./llm";
 import { runIntelligentScan } from "./analysis";
-import {
-  createTavilyWebResearchProvider,
-  offlineWebResearchProvider,
-} from "./research";
+import { offlineWebResearchProvider } from "./research";
 import { getDueIntradayScan } from "./intraday-scheduler";
 import { LocalAnalysisSessionRepository } from "./session-repository";
 import { DEFAULT_FACTOR_TAGS, type AnalysisSession } from "./types";
@@ -45,13 +42,11 @@ function writeLastRun(slotAt: string) {
   window.localStorage.setItem(LAST_RUN_KEY, JSON.stringify({ slotAt }));
 }
 
-function resolveResearchProvider() {
-  const state = useAppStore.getState();
-  if (state.aiResearchProvider === "tavily") {
-    return createTavilyWebResearchProvider(defaultInvoke);
-  }
-  return offlineWebResearchProvider;
-}
+/**
+ * 研究简报始终使用本地离线样本（确定性、无外部依赖）；分析结论由配置的
+ * AI 模型给出。如需接入外部搜索源，在 `WebResearchProvider` 接缝处扩展。
+ */
+const researchProvider = offlineWebResearchProvider;
 
 /**
  * 执行一次智能分析扫描（手动/定时触发）：对参与标的并行调用启用模型，
@@ -78,8 +73,7 @@ export async function executeIntelligentScan(
       instrumentIds,
       llmProviders: enabledProviders,
       llm: createInvokeLlmClient(),
-      researchProvider: resolveResearchProvider(),
-      researchApiKey: state.aiResearchApiKey,
+      researchProvider,
       factorConfig: state.aiFactorConfig,
       factorTags: DEFAULT_FACTOR_TAGS,
       listInstruments: () => configuredProvider().listInstruments(),

@@ -17,7 +17,7 @@ test("intelligence workbench renders empty state and schedule summary", async ({
   await expect(page.getByText(/尚未启用任何 AI 模型/)).toBeVisible();
 });
 
-test("preferences expose AI model, factor, research and schedule groups", async ({
+test("preferences expose AI model, factor and schedule groups", async ({
   page,
 }) => {
   await openApp(page, "/modules/preferences");
@@ -25,11 +25,16 @@ test("preferences expose AI model, factor, research and schedule groups", async 
     page.getByRole("heading", { name: "AI 分析模型" }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "随机因子" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "网络研究" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "智能扫描（交易时段）" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "添加模型" })).toBeEnabled();
+  // 预设切换：选中 MiniMax 国内站后添加模型应填入对应端点
+  await page.getByLabel("选择模型预设").selectOption("minimax-cn");
+  await page.getByRole("button", { name: "添加模型" }).click();
+  await expect(
+    page.locator('input[value="https://api.minimax.chat/v1"]'),
+  ).toBeVisible();
 });
 
 test("watchlist row offers the intelligent-analysis opt-in action", async ({

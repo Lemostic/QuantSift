@@ -4,6 +4,10 @@ import type { ResearchBrief, WebResearchProvider } from "./types";
 /**
  * 离线研究提供方：返回录制好的简报模板（无网络），用于演示与确定性测试。
  * 简报标题/摘要按标的插值，保证可读且稳定。
+ *
+ * 分析结论完全由配置的 AI 模型（DeepSeek、MiniMax 等）给出；简报只作为
+ * 可选的上下文信息随会话留存。`WebResearchProvider` 接缝保留，未来如需
+ * 接入其他搜索源可在此扩展，无需改动分析引擎。
  */
 export const offlineWebResearchProvider: WebResearchProvider = {
   id: "offline",
@@ -34,44 +38,3 @@ export const offlineWebResearchProvider: WebResearchProvider = {
     ];
   },
 };
-
-/**
- * Tavily 网络研究提供方：通过 Rust 命令 `web_search_tavily` 搜索，密钥由
- * 调用方（前端配置）每次传入。测试注入假 invoke。
- */
-export function createTavilyWebResearchProvider(
-  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>,
-): WebResearchProvider {
-  return {
-    id: "tavily",
-    async research(
-      instrument: Instrument,
-      context,
-    ): Promise<ResearchBrief[]> {
-      if (!context.apiKey) {
-        throw new Error("未配置网络研究密钥（Tavily API Key）");
-      }
-      const tagWords = context.factorEntries
-        .map((entry) => entry.label)
-        .slice(0, 3)
-        .join(" ");
-      const query = `${instrument.name} ${instrument.symbol} 最新消息 ${tagWords}`;
-      const results = (await invoke("web_search_tavily", {
-        query,
-        apiKey: context.apiKey,
-        maxResults: 5,
-      })) as Array<{
-        title: string;
-        url: string;
-        snippet: string;
-      }>;
-      return results.map((result) => ({
-        source: "tavily",
-        title: result.title,
-        url: result.url,
-        snippet: result.snippet,
-        fetchedAt: new Date().toISOString(),
-      }));
-    },
-  };
-}

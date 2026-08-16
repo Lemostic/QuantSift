@@ -60,8 +60,6 @@ describe("app store migration", () => {
         isDefault: true,
       }),
     ]);
-    expect(migrated.aiResearchProvider).toBe("offline");
-    expect(migrated.aiResearchApiKey).toBe("");
     expect(migrated.aiIntradaySchedule).toMatchObject({
       enabled: false,
       intervalMinutes: 15,

@@ -31,8 +31,6 @@ interface AppState {
   // AI analysis config (persisted; keys stay local)
   aiProviders: LlmProviderConfig[];
   aiFactorConfig: FactorConfig;
-  aiResearchProvider: "offline" | "tavily";
-  aiResearchApiKey: string;
   aiIntradaySchedule: IntradaySchedule;
 
   // Actions
@@ -46,8 +44,6 @@ interface AppState {
   setAllowOfflineFallback: (allow: boolean) => void;
   setAiProviders: (providers: LlmProviderConfig[]) => void;
   setAiFactorConfig: (config: FactorConfig) => void;
-  setAiResearchProvider: (provider: "offline" | "tavily") => void;
-  setAiResearchApiKey: (key: string) => void;
   setAiIntradaySchedule: (schedule: IntradaySchedule) => void;
 }
 
@@ -143,19 +139,15 @@ export function migrateAppState(
 
   // ---- v8 ----
   // AI analysis configuration defaults (multi-model keys, factor tags,
-  // research provider, intraday schedule).
+  // intraday schedule). Note: research provider/API key fields from an
+  // intermediate v8 shape are intentionally ignored — research now always
+  // uses the local offline briefs.
   if (fromVersion < 8) {
     if (!Array.isArray(p.aiProviders)) {
       p.aiProviders = defaultAiProviders();
     }
     if (!p.aiFactorConfig || typeof p.aiFactorConfig !== "object") {
       p.aiFactorConfig = defaultFactorConfig(DEFAULT_FACTOR_TAGS);
-    }
-    if (p.aiResearchProvider !== "tavily") {
-      p.aiResearchProvider = "offline";
-    }
-    if (typeof p.aiResearchApiKey !== "string") {
-      p.aiResearchApiKey = "";
     }
     if (!p.aiIntradaySchedule || typeof p.aiIntradaySchedule !== "object") {
       p.aiIntradaySchedule = { ...DEFAULT_INTRADAY_SCHEDULE };
@@ -177,8 +169,6 @@ export const useAppStore = create<AppState>()(
       allowOfflineFallback: true,
       aiProviders: defaultAiProviders(),
       aiFactorConfig: defaultFactorConfig(DEFAULT_FACTOR_TAGS),
-      aiResearchProvider: "offline",
-      aiResearchApiKey: "",
       aiIntradaySchedule: { ...DEFAULT_INTRADAY_SCHEDULE },
 
       toggleSidebar: () =>
@@ -210,9 +200,6 @@ export const useAppStore = create<AppState>()(
         set({ allowOfflineFallback }),
       setAiProviders: (aiProviders) => set({ aiProviders }),
       setAiFactorConfig: (aiFactorConfig) => set({ aiFactorConfig }),
-      setAiResearchProvider: (aiResearchProvider) =>
-        set({ aiResearchProvider }),
-      setAiResearchApiKey: (aiResearchApiKey) => set({ aiResearchApiKey }),
       setAiIntradaySchedule: (aiIntradaySchedule) =>
         set({ aiIntradaySchedule }),
     }),
@@ -229,8 +216,6 @@ export const useAppStore = create<AppState>()(
         allowOfflineFallback: s.allowOfflineFallback,
         aiProviders: s.aiProviders,
         aiFactorConfig: s.aiFactorConfig,
-        aiResearchProvider: s.aiResearchProvider,
-        aiResearchApiKey: s.aiResearchApiKey,
         aiIntradaySchedule: s.aiIntradaySchedule,
       }),
       migrate: migrateAppState,
