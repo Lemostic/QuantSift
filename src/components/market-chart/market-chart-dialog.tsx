@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Brain, ChartLineUp, Crosshair, Info, TrendUp } from "@phosphor-icons/react";
 import { configuredProvider } from "@/data/provider-registry";
 import { buildRecommendation } from "@/quant/recommendation";
-import { buildBuyTimingMarkers } from "@/quant/buy-timing";
+import { buildBuyTimingMarkers, buildSellTimingMarkers } from "@/quant/buy-timing";
 import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
 import type { DailyBar, Instrument, RecommendationSignal } from "@/quant/types";
 import { ProfessionalMarketChart } from "./professional-market-chart";
@@ -78,6 +78,7 @@ export function MarketChartDialog({
     [bars, instrument],
   );
   const markers = useMemo(() => buildBuyTimingMarkers(bars), [bars]);
+  const sellMarkers = useMemo(() => buildSellTimingMarkers(bars), [bars]);
   const intelligence = useMemo(
     () =>
       recommendation && bars.length >= 21
@@ -88,6 +89,9 @@ export function MarketChartDialog({
   const visibleBars = bars.slice(-range);
   const visibleDates = new Set(visibleBars.map((bar) => bar.tradeDate));
   const visibleMarkers = markers.filter((marker) =>
+    visibleDates.has(marker.tradeDate),
+  );
+  const visibleSellMarkers = sellMarkers.filter((marker) =>
     visibleDates.has(marker.tradeDate),
   );
 
@@ -158,6 +162,7 @@ export function MarketChartDialog({
               <ProfessionalMarketChart
                 bars={visibleBars}
                 markers={visibleMarkers}
+                sellMarkers={visibleSellMarkers}
                 height={460}
               />
 

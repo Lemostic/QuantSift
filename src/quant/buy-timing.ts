@@ -10,6 +10,21 @@ export interface BuyTimingMarker {
   detail: string;
 }
 
+export type SellTimingKind =
+  | "trend_breakdown"
+  | "momentum_reversal"
+  | "overextended";
+
+export interface SellTimingMarker {
+  tradeDate: string;
+  price: number;
+  kind: SellTimingKind;
+  label: string;
+  detail: string;
+}
+
+export type TradeTimingMarker = BuyTimingMarker | SellTimingMarker;
+
 function average(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
@@ -76,6 +91,84 @@ export function buildBuyTimingMarkers(bars: DailyBar[]): BuyTimingMarker[] {
         kind: "pullback_confirmed",
         label: "回踩确认",
         detail: "回踩 MA20 后收回，5 日动量仍为正",
+      });
+      lastMarkerIndex = index;
+    }
+  }
+
+  return markers;
+}
+
+/**
+ * Finds historical sell windows from normalized bars — the mirror image of
+ * the buy rules: a broken uptrend, fading momentum, or an overextended
+ * price rolling over. Spaced the same way to keep the chart readable.
+ */
+export function buildSellTimingMarkers(bars: DailyBar[]): SellTimingMarker[] {
+  const sorted = [...bars].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+  if (sorted.length < 21) return [];
+
+  const markers: SellTimingMarker[] = [];
+  let lastMarkerIndex = -10;
+
+  for (let index = 20; index < sorted.length; index += 1) {
+    if (index - lastMarkerIndex < 5) continue;
+
+    const current = sorted[index];
+    const ma5 = sma(sorted, index, 5);
+    const ma20 = sma(sorted, index, 20);
+    const previousMa5 = sma(sorted, index - 1, 5);
+    const previousMa20 = sma(sorted, index - 1, 20);
+    const fiveDayMomentum = current.close / sorted[index - 5].close - 1;
+    const distanceFromTrend = current.close / ma20 - 1;
+    const trendIsBroken = ma5 < ma20 && fiveDayMomentum < 0;
+
+    const crossedDown = previousMa5 >= previousMa20 && ma5 < ma20;
+    const closedBelowTrend = current.close < ma20 && current.close < current.open;
+    const breakdownConfirmed =
+      trendIsBroken && closedBelowTrend && distanceFromTrend >= -0.15;
+
+    const priorLow = Math.min(...sorted.slice(index - 10, index).map((bar) => bar.low));
+    const averageVolume = average(
+      sorted.slice(index - 5, index).map((bar) => bar.volume),
+    );
+    const brokeDown =
+      current.close < priorLow &&
+      current.volume >= averageVolume &&
+      distanceFromTrend >= -0.15;
+
+    const overextended = distanceFromTrend > 0.12;
+    // A red candle after overextension is the early rollover sign; five-day
+    // momentum may still be positive at the very top of a spike.
+    const overextendedReversal = overextended && current.close < current.open;
+
+    if (crossedDown || (trendIsBroken && brokeDown)) {
+      markers.push({
+        tradeDate: current.tradeDate,
+        price: current.high,
+        kind: "trend_breakdown",
+        label: "趋势破位",
+        detail: crossedDown
+          ? "MA5 下穿 MA20，短期趋势转弱"
+          : "价格跌破近 10 日低点且趋势保持向下",
+      });
+      lastMarkerIndex = index;
+    } else if (breakdownConfirmed) {
+      markers.push({
+        tradeDate: current.tradeDate,
+        price: current.high,
+        kind: "momentum_reversal",
+        label: "动量转弱",
+        detail: "收盘跌破 MA20 且收阴，5 日动量已转负",
+      });
+      lastMarkerIndex = index;
+    } else if (overextendedReversal) {
+      markers.push({
+        tradeDate: current.tradeDate,
+        price: current.high,
+        kind: "overextended",
+        label: "高位回落",
+        detail: "偏离 20 日均线过远后收阴，谨防回撤",
       });
       lastMarkerIndex = index;
     }

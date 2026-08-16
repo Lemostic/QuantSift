@@ -11,8 +11,8 @@ import {
   type DeepPartial,
 } from "klinecharts";
 import type { DailyBar } from "@/quant/types";
-import type { BuyTimingMarker } from "@/quant/buy-timing";
-import { buildBuyTimingMarkers } from "@/quant/buy-timing";
+import type { BuyTimingMarker, SellTimingMarker } from "@/quant/buy-timing";
+import { buildBuyTimingMarkers, buildSellTimingMarkers } from "@/quant/buy-timing";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
@@ -20,6 +20,7 @@ import { buildBuyTimingMarkers } from "@/quant/buy-timing";
 interface ProfessionalMarketChartProps {
   bars: DailyBar[];
   markers?: BuyTimingMarker[];
+  sellMarkers?: SellTimingMarker[];
   height?: number;
   className?: string;
 }
@@ -325,6 +326,7 @@ function LegendBar({ bars }: { bars: DailyBar[] }) {
 export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
   bars,
   markers: externalMarkers,
+  sellMarkers: externalSellMarkers,
   height = 430,
   className,
 }: ProfessionalMarketChartProps) {
@@ -407,6 +409,7 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
 
     // Use external markers or compute from bars
     const markers = externalMarkers ?? buildBuyTimingMarkers(sortedBars);
+    const sellMarkers = externalSellMarkers ?? buildSellTimingMarkers(sortedBars);
 
     // Set barSpace explicitly after data is loaded (override layout auto)
     chart.setBarSpace(targetSpace);
@@ -448,6 +451,33 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
             },
             line: {
               color: marker.kind === "trend_breakout" ? "rgba(34,197,139,0.7)" : `rgba(92,141,247,0.6)`,
+              style: "dashed",
+              size: 1,
+            },
+          } as any,
+        });
+      }
+    }
+
+    // ── Sell-timing signal overlays (rose, mirrored rules) ───────
+    if (sellMarkers.length > 0) {
+      for (const marker of sellMarkers) {
+        const ts = toTimestamp(marker.tradeDate);
+        chart.createOverlay({
+          name: "simpleAnnotation",
+          groupId: "sell_signals",
+          paneId: "candle_pane",
+          points: [{ timestamp: ts }],
+          extendData: marker.label,
+          styles: {
+            polygon: {
+              color: "#f43f5e",
+              borderColor: "#f43f5e",
+              borderSize: 1,
+              style: "fill",
+            },
+            line: {
+              color: "rgba(244,63,94,0.7)",
               style: "dashed",
               size: 1,
             },

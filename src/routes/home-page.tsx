@@ -21,7 +21,7 @@ import {
 import { loadWithFallback, configuredProvider } from "@/data/provider-registry";
 import type { DataSourceId } from "@/data/provider-registry";
 import { summarizeDashboard } from "@/dashboard/summary";
-import { buildBuyTimingMarkers } from "@/quant/buy-timing";
+import { buildBuyTimingMarkers, buildSellTimingMarkers } from "@/quant/buy-timing";
 import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
 import type { SignalIntelligence } from "@/intelligence/signal-intelligence";
 import {
@@ -238,11 +238,18 @@ export function HomePage() {
 
   const visibleBars = chartBars.slice(-range);
   const markers = useMemo(() => buildBuyTimingMarkers(chartBars), [chartBars]);
+  const sellMarkers = useMemo(
+    () => buildSellTimingMarkers(chartBars),
+    [chartBars],
+  );
   const visibleDateSet = useMemo(
     () => new Set(visibleBars.map((bar) => bar.tradeDate)),
     [visibleBars],
   );
   const visibleMarkers = markers.filter((marker) =>
+    visibleDateSet.has(marker.tradeDate),
+  );
+  const visibleSellMarkers = sellMarkers.filter((marker) =>
     visibleDateSet.has(marker.tradeDate),
   );
   const intelligence = useMemo(
@@ -344,6 +351,7 @@ export function HomePage() {
                 recommendation={selected}
                 bars={visibleBars}
                 markers={visibleMarkers}
+                sellMarkers={visibleSellMarkers}
                 loading={chartLoading}
                 range={range}
                 onRangeChange={setRange}
@@ -542,6 +550,7 @@ function ChartWorkspace({
   recommendation,
   bars,
   markers,
+  sellMarkers,
   loading,
   range,
   onRangeChange,
@@ -550,6 +559,7 @@ function ChartWorkspace({
   recommendation: Recommendation;
   bars: DailyBar[];
   markers: ReturnType<typeof buildBuyTimingMarkers>;
+  sellMarkers: ReturnType<typeof buildSellTimingMarkers>;
   loading: boolean;
   range: 7 | 20 | 30;
   onRangeChange: (range: 7 | 20 | 30) => void;
@@ -638,6 +648,7 @@ function ChartWorkspace({
         <ProfessionalMarketChart
           bars={bars}
           markers={markers}
+          sellMarkers={sellMarkers}
           height={390}
           className="[&>div:last-child]:max-sm:!h-[320px]"
         />
@@ -652,39 +663,62 @@ function ChartWorkspace({
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-[11px] font-semibold">
               <Crosshair size={14} className="text-primary" />
-              动态买点轨迹
+              动态买卖点轨迹
             </div>
             <span className="font-mono text-[9px] text-foreground-subtle">
-              {markers.length} SIGNALS
+              {markers.length + sellMarkers.length} SIGNALS
             </span>
           </div>
-          {markers.length > 0 ? (
+          {markers.length + sellMarkers.length > 0 ? (
             <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-              {markers
-                .slice(-3)
-                .reverse()
-                .map((marker) => (
-                  <div
-                    key={marker.tradeDate}
-                    className="min-w-[210px] flex-1 border-l-2 border-accent-emerald bg-accent-emerald/[0.035] px-2.5 py-2"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[9px] text-foreground-subtle">
-                        {marker.tradeDate}
-                      </span>
-                      <span className="text-[9px] font-medium text-accent-emerald">
-                        {marker.label}
-                      </span>
+              {[
+                ...sellMarkers.map((marker) => ({
+                  side: "sell" as const,
+                  ...marker,
+                })),
+                ...markers.map((marker) => ({
+                  side: "buy" as const,
+                  ...marker,
+                })),
+              ]
+                .sort((a, b) => b.tradeDate.localeCompare(a.tradeDate))
+                .slice(0, 4)
+                .map((marker) => {
+                  const isSell = marker.side === "sell";
+                  return (
+                    <div
+                      key={`${marker.side}-${marker.tradeDate}`}
+                      className={cn(
+                        "min-w-[210px] flex-1 border-l-2 px-2.5 py-2",
+                        isSell
+                          ? "border-accent-rose bg-accent-rose/[0.04]"
+                          : "border-accent-emerald bg-accent-emerald/[0.035]",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-[9px] text-foreground-subtle">
+                          {marker.tradeDate}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[9px] font-medium",
+                            isSell ? "text-accent-rose" : "text-accent-emerald",
+                          )}
+                        >
+                          {isSell ? "卖 · " : "买 · "}
+                          {marker.label}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-[10px] text-foreground-muted">
+                        {marker.detail}
+                      </p>
                     </div>
-                    <p className="mt-1 truncate text-[10px] text-foreground-muted">
-                      {marker.detail}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           ) : (
             <p className="mt-2 text-[10px] leading-4 text-foreground-muted">
-              当前窗口未出现满足趋势突破或回踩确认规则的历史节点。
+              当前窗口未出现满足趋势突破、回踩确认或破位规则的历史节点。
             </p>
           )}
         </div>
