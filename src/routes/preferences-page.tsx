@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowCounterClockwise,
@@ -6,6 +6,8 @@ import {
   ArrowsVertical,
   Check,
   Database,
+  Eraser,
+  HardDrives,
   Palette,
   SlidersHorizontal,
   Sparkle,
@@ -26,6 +28,9 @@ import {
   type PagePadding,
 } from "@/lib/spacing";
 import { registry } from "@/data/provider-registry";
+import { getBrowserBarCache } from "@/cache/browser-store";
+import { cacheStats } from "@/cache/service";
+import type { CacheStats } from "@/cache/service";
 
 export function PreferencesPage() {
   const contentPadding = useAppStore((s) => s.contentPadding);
@@ -71,6 +76,8 @@ export function PreferencesPage() {
           onFallbackChange={setAllowOfflineFallback}
         />
       </SettingsGroup>
+
+      <BarCacheSettings />
 
       <PaddingPreview value={contentPadding} />
 
@@ -150,6 +157,125 @@ export function PreferencesPage() {
 // ---------------------------------------------------------------------------
 // Live preview
 // ---------------------------------------------------------------------------
+
+function BarCacheSettings() {
+  const [stats, setStats] = useState<CacheStats | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      setStats(cacheStats(await getBrowserBarCache().listStates()));
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : String(cause));
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const clearCache = async () => {
+    setClearing(true);
+    setNotice(null);
+    try {
+      await getBrowserBarCache().clear();
+      await reload();
+      setNotice("本地行情缓存已清空，下次刷新会重新抓取。");
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const formatFetchTime = (iso: string | null) =>
+    iso
+      ? new Date(iso).toLocaleString("zh-CN", {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "--";
+
+  return (
+    <SettingsGroup
+      title="本地行情缓存"
+      description="研究台会把每次抓取的日线写入本地缓存：启动时先展示缓存结果，再增量刷新最新行情；实时源不可用时缓存仍可离线查看。清除后所有标的的本地 K 线会重新抓取。"
+      icon={<HardDrives className="h-4 w-4" />}
+    >
+      <div className="grid gap-2 sm:grid-cols-4">
+        <CacheStatItem label="缓存标的" value={String(stats?.instruments ?? "--")} />
+        <CacheStatItem label="缓存 K 线" value={String(stats?.bars ?? "--")} />
+        <CacheStatItem
+          label="最新行情日期"
+          value={stats?.latestTradeDate ?? "--"}
+          mono
+        />
+        <CacheStatItem
+          label="最近抓取"
+          value={formatFetchTime(stats?.lastFetchedAt ?? null)}
+          mono
+        />
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+        <p className="min-h-4 text-[11px]">
+          {notice && (
+            <span
+              className={cn(
+                "flex items-center gap-1.5",
+                notice.includes("已清空")
+                  ? "text-accent-emerald"
+                  : "text-accent-rose",
+              )}
+            >
+              {notice.includes("已清空") ? (
+                <Check size={13} />
+              ) : (
+                <Warning size={13} />
+              )}
+              {notice}
+            </span>
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={() => void clearCache()}
+          disabled={clearing || (stats?.instruments ?? 0) === 0}
+          className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:border-destructive/40 hover:bg-destructive/[0.06] hover:text-destructive disabled:opacity-50"
+        >
+          <Eraser size={14} />
+          {clearing ? "清空中" : "清除缓存"}
+        </button>
+      </div>
+    </SettingsGroup>
+  );
+}
+
+function CacheStatItem({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2.5">
+      <div className="text-[10px] text-muted-foreground">{label}</div>
+      <div
+        className={cn(
+          "mt-1 truncate text-sm font-semibold",
+          mono && "font-mono text-xs",
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
 
 function MarketDataSettings({
   source,

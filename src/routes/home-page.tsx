@@ -18,12 +18,18 @@ import {
   TrendUp,
   Warning,
 } from "@phosphor-icons/react";
-import { loadConfiguredMarketData, registry } from "@/data/provider-registry";
+import { loadWithFallback, configuredProvider } from "@/data/provider-registry";
 import type { DataSourceId } from "@/data/provider-registry";
 import { summarizeDashboard } from "@/dashboard/summary";
 import { buildBuyTimingMarkers } from "@/quant/buy-timing";
 import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
 import type { SignalIntelligence } from "@/intelligence/signal-intelligence";
+import {
+  createCachedMarketDataProvider,
+  type CachedBarsResult,
+} from "@/cache/cached-provider";
+import { getBrowserBarCache } from "@/cache/browser-store";
+import { loadCachedMarketData } from "@/cache/service";
 import type {
   DailyBar,
   Recommendation,
@@ -63,7 +69,6 @@ const signalMeta: Record<
     dotClassName: "bg-accent-rose",
   },
 };
-
 export function HomePage() {
   const watchlist = useWatchlist();
   const scans = useScanCenter();
@@ -76,6 +81,12 @@ export function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<DataSourceId>("akshare");
   const [fellBack, setFellBack] = useState(false);
+  /** True while the visible result was rendered from the local bar cache. */
+  const [servedFromCache, setServedFromCache] = useState(false);
+  /** Latest cached trade date across the watchlist (YYYY-MM-DD or null). */
+  const [cacheAsOf, setCacheAsOf] = useState<string | null>(null);
+  /** Non-fatal live-source failure while the cache kept the page usable. */
+  const [cacheError, setCacheError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [chartOpen, setChartOpen] = useState(false);
   const [chartBars, setChartBars] = useState<DailyBar[]>([]);
@@ -94,17 +105,69 @@ export function HomePage() {
   const refresh = async () => {
     setLoading(true);
     setError(null);
+    setCacheError(null);
+    setCacheAsOf(null);
     try {
-      const result = await loadConfiguredMarketData(watchedIds);
+      const provider = configuredProvider();
+      const result = await loadCachedMarketData({
+        cache: getBrowserBarCache(),
+        provider,
+        instrumentIds: watchedIds,
+        // Fast path: render from persisted local bars before the live
+        // refresh completes, so the dashboard is never blank on startup.
+        onCacheServed: (snapshot) => {
+          setRecommendations(snapshot.recommendations);
+          setServedFromCache(true);
+          setLoading(false);
+        },
+      });
       setRecommendations(result.recommendations);
-      setDataSource(result.source);
-      setFellBack(result.fellBack);
-      // A network failure that triggers the offline fallback is surfaced as a
-      // non-fatal notice (the dashboard still renders with fixture data).
-      if (result.fellBack && result.error) {
-        setError(null);
-      } else if (result.error) {
-        setError(result.error);
+      setDataSource(provider.id === "akshare" ? "akshare" : "recorded");
+      setFellBack(false);
+      setServedFromCache(result.meta.servedFrom === "cache");
+      const latestTradeDate = result.meta.states.reduce<string | null>(
+        (latest, state) =>
+          state.lastTradeDate && (!latest || state.lastTradeDate > latest)
+            ? state.lastTradeDate
+            : latest,
+        null,
+      );
+      setCacheAsOf(latestTradeDate);
+      setCacheError(
+        result.meta.refreshErrors.length > 0 &&
+          result.recommendations.length > 0
+          ? result.meta.refreshErrors.join("；")
+          : null,
+      );
+
+      // Last resort: the live source failed and the cache has nothing
+      // usable — keep the recorded-fixture offline fallback behavior.
+      if (
+        result.recommendations.length === 0 &&
+        result.meta.refreshErrors.length > 0 &&
+        allowOfflineFallback &&
+        provider.id !== "recorded"
+      ) {
+        const fallback = await loadWithFallback(watchedIds, "recorded", false);
+        if (fallback.recommendations.length > 0) {
+          setRecommendations(fallback.recommendations);
+          setDataSource("recorded");
+          setFellBack(true);
+          setError(null);
+          setServedFromCache(false);
+          setCacheError(null);
+        } else {
+          setError(
+            fallback.error ??
+              result.meta.refreshErrors.join("；") ??
+              "未知错误",
+          );
+        }
+      } else if (
+        result.recommendations.length === 0 &&
+        result.meta.refreshErrors.length > 0
+      ) {
+        setError(result.meta.refreshErrors.join("；"));
       }
       setSelectedId((current) =>
         result.recommendations.some((item) => item.instrument.id === current)
@@ -143,6 +206,11 @@ export function HomePage() {
     [recommendations, selectedId],
   );
 
+  const cachedProvider = useMemo(
+    () => createCachedMarketDataProvider(configuredProvider(), getBrowserBarCache()),
+    [preferredDataSource, allowOfflineFallback],
+  );
+
   useEffect(() => {
     if (!selected) {
       setChartBars([]);
@@ -150,11 +218,10 @@ export function HomePage() {
     }
     let cancelled = false;
     setChartLoading(true);
-    void registry
-      .provider(dataSource)
-      .getDailyBars(selected.instrument.id, 30)
-      .then((bars) => {
-        if (!cancelled) setChartBars(bars);
+    void cachedProvider
+      .getDailyBarsCached(selected.instrument.id, 30)
+      .then((result: CachedBarsResult) => {
+        if (!cancelled) setChartBars(result.bars);
       })
       .catch((cause) => {
         if (!cancelled) {
@@ -167,7 +234,7 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [selected?.instrument.id, dataSource]);
+  }, [selected?.instrument.id, cachedProvider]);
 
   const visibleBars = chartBars.slice(-range);
   const markers = useMemo(() => buildBuyTimingMarkers(chartBars), [chartBars]);
@@ -198,6 +265,8 @@ export function HomePage() {
         latestRun={scans.runs[0] ?? null}
         dataSource={dataSource}
         fellBack={fellBack}
+        servedFromCache={servedFromCache}
+        degraded={cacheError !== null}
         onRefresh={() => void runManualScan()}
       />
 
@@ -232,7 +301,26 @@ export function HomePage() {
             </div>
           )}
 
-          {!fellBack && summary.freshness.state === "stale" && (
+          {!fellBack && cacheError && (
+            <div className="flex items-start justify-between gap-4 border-l-2 border-accent-amber bg-accent-amber/[0.05] px-3 py-2.5 sm:items-center sm:px-4">
+              <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
+                <Warning
+                  size={16}
+                  weight="fill"
+                  className="mt-0.5 shrink-0 text-accent-amber sm:mt-0"
+                />
+                <p className="text-[11px] leading-4 text-foreground-muted sm:text-xs">
+                  实时数据源暂不可用，当前展示本地缓存行情
+                  {cacheAsOf ? `（截至 ${cacheAsOf}）` : ""}。数据可能延迟，不构成交易依据。
+                </p>
+              </div>
+              <Badge variant="outline" className="hidden shrink-0 font-mono text-[9px] sm:inline-flex">
+                CACHE
+              </Badge>
+            </div>
+          )}
+
+          {!fellBack && !cacheError && summary.freshness.state === "stale" && (
             <div className="flex items-start justify-between gap-4 border-l-2 border-accent-amber bg-accent-amber/[0.05] px-3 py-2.5 sm:items-center sm:px-4">
               <div className="flex min-w-0 items-start gap-2.5 sm:items-center">
                 <Warning
@@ -274,6 +362,7 @@ export function HomePage() {
               recommendation={selected}
               intelligence={intelligence}
               latestRun={scans.runs[0] ?? null}
+              cacheAsOf={cacheAsOf}
             />
           )}
         </>
@@ -298,16 +387,22 @@ function DashboardHeader({
   latestRun,
   dataSource,
   fellBack,
+  servedFromCache,
+  degraded,
   onRefresh,
 }: {
   loading: boolean;
   latestRun: ScanRun | null;
   dataSource: DataSourceId;
   fellBack: boolean;
+  servedFromCache: boolean;
+  /** Live source failed; the visible result came from the local cache. */
+  degraded: boolean;
   onRefresh: () => void;
 }) {
-  const sourceLabel =
-    dataSource === "akshare" ? "AKSHARE" : "RECORDED FIXTURE";
+  const sourceLabel = `${dataSource === "akshare" ? "AKSHARE" : "RECORDED"} · ${
+    servedFromCache ? "CACHE" : fellBack ? "FIXTURE" : "LIVE"
+  }`;
   return (
     <header className="flex flex-col gap-3 border-b border-border/70 pb-3 sm:flex-row sm:items-end sm:justify-between sm:pb-4">
       <div className="min-w-0">
@@ -316,7 +411,7 @@ function DashboardHeader({
             <span
               className={cn(
                 "inline-block h-1.5 w-1.5 rounded-full",
-                fellBack ? "bg-accent-amber" : "bg-accent-emerald",
+                fellBack || degraded ? "bg-accent-amber" : "bg-accent-emerald",
               )}
             />
             MARKET MONITOR
@@ -724,10 +819,12 @@ function ResearchInspector({
   recommendation,
   intelligence,
   latestRun,
+  cacheAsOf,
 }: {
   recommendation: Recommendation;
   intelligence: SignalIntelligence | null;
   latestRun: ScanRun | null;
+  cacheAsOf: string | null;
 }) {
   return (
     <section className="grid overflow-hidden rounded-lg border border-border bg-background-elevated/40 md:grid-cols-2 xl:grid-cols-[1fr_0.92fr_0.92fr_0.78fr]">
@@ -777,6 +874,10 @@ function ResearchInspector({
         <dl className="mt-3 space-y-2 text-[10px]">
           <SnapshotRow label="行情日期" value={recommendation.asOfDate} />
           <SnapshotRow label="数据来源" value={recommendation.provider} />
+          <SnapshotRow
+            label="行情缓存"
+            value={cacheAsOf ? `截至 ${cacheAsOf}` : "未缓存"}
+          />
           <SnapshotRow
             label="最近扫描"
             value={

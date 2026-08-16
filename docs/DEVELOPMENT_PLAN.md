@@ -237,9 +237,56 @@ Acceptance criteria:
 - The page is usable at 1280x720 and compact widths with loading, empty, and
   error states.
 
+## Slice 8: Local Bar Cache with Incremental Refresh
+
+Status: implemented (v0.5.0).
+
+Goal: persist normalized daily bars locally so the dashboard renders from
+cache first, refreshes only the latest tail, and stays usable offline.
+
+Deliverables:
+
+- `BarCacheStore` storage seam with in-memory and versioned localStorage
+  adapters; corrupted documents repair to an empty cache instead of
+  throwing, and a SQLite adapter can replace localStorage without touching
+  callers.
+- `mergeDailyBars` deterministic merge: dedupe by trade date, fetched bars
+  win, ascending sort, capped history per instrument.
+- `refreshInstrumentCache` incremental refresh core: fetch the provider's
+  latest tail, merge over cached history, persist; a provider failure never
+  destroys the cache.
+- Trading-day-aware freshness (`computeCacheFreshness`): weekends are
+  skipped so Friday data checked on Monday is one day old; exchange
+  holidays are a documented limitation.
+- `createCachedMarketDataProvider`: contract-compliant `MarketDataProvider`
+  wrapper that serves fresh cache without network, refreshes stale cache,
+  and falls back to cached bars when the live source fails.
+- `loadCachedMarketData` service: cache-first render via `onCacheServed`,
+  then a live incremental refresh; provenance metadata (served-from, stale
+  flags, refresh errors) keeps the dashboard honest about data age.
+- Dashboard integration: CACHE/LIVE source label, amber "本地缓存行情" banner
+  with cached-as-of date, cache row in the research snapshot, and a cache
+  management group on the preferences page (stats + clear).
+
+Public test seam:
+
+- `BarCacheStore`: get/put/remove/clear with merge semantics.
+- `mergeDailyBars`, `computeCacheFreshness`, `refreshInstrumentCache`:
+  deterministic pure behavior.
+- `createCachedMarketDataProvider` and `loadCachedMarketData`: cache-first,
+  refresh, and offline-fallback flows with injected clocks.
+
+Acceptance criteria:
+
+- A second app start renders from cache before any network round-trip.
+- Refreshing fetches only the configured tail and never shrinks cached
+  history.
+- A live-provider failure keeps the last cached snapshot usable and is
+  reported, not silently swallowed.
+- All tests run without network access and remain deterministic.
+
 ## Later Slices
 
-- AKShare Python sidecar with recorded contract fixtures.
-- SQLite normalized cache and incremental refresh.
+- SQLite adapter for `BarCacheStore` and cache size management.
 - OS startup/background scheduling.
 - Provider-specific SMS adapters after selecting a vendor and confirming terms.

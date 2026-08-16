@@ -10,6 +10,7 @@ QuantSift 是一款本地优先的个人桌面量化研究助手。首个版本�
 - 股票、基金统一标的与日线模型
 - 可替换的 `MarketDataProvider` 数据边界
 - AKShare 实时数据源（Python sidecar），失败时自动回退离线样例
+- 本地行情缓存：启动即渲染缓存、增量刷新最新行情、离线兜底
 - MA5/MA20、20 日动量、年化波动率因子
 - “买入观察 / 继续观察 / 暂不交易”三级研究信号
 - 因子拆解、推荐理由、风险提示和数据时间
@@ -22,7 +23,9 @@ QuantSift 是一款本地优先的个人桌面量化研究助手。首个版本�
 数据流：前端只依赖 `MarketDataProvider` 契约。生产模式通过 Tauri 命令调用
 Python sidecar（`sidecar/quantsift_sidecar.py`，底层使用 AKShare 拉取 A 股、
 ETF 与场外基金日线）；sidecar 不可用或网络失败时自动回退到内置离线样例，
-并在看板顶部显示数据源与回退提示。
+并在看板顶部显示数据源与回退提示。所有抓取的日线会写入本地缓存
+（`src/cache/`）：研究台启动时先展示缓存结果，再增量刷新最新行情；实时源
+不可用时缓存行情可离线查看，偏好页可查看缓存统计并手动清空。
 
 ## 开发
 
@@ -93,6 +96,7 @@ lipo -archs src-tauri/target/universal-apple-darwin/release/bundle/macos/QuantSi
 
 ```text
 src/quant/       领域类型与推荐引擎
+src/cache/       本地行情缓存、增量刷新与新鲜度计算
 src/data/        数据提供方契约、AKShare provider、离线样例、回退注册表
 src/routes/      桌面视图
 src-tauri/       Tauri 2 后端与打包配置
