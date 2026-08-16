@@ -1,5 +1,6 @@
 // QuantSift - local quantitative research assistant.
 
+mod ai;
 mod market;
 
 use serde::Serialize;
@@ -86,7 +87,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_info,
             market::eastmoney_list_instruments,
-            market::eastmoney_get_daily_bars
+            market::eastmoney_get_daily_bars,
+            ai::llm_chat_completion,
+            ai::web_search_tavily
         ])
         .run(tauri::generate_context!())
         .expect("error while running QuantSift");
