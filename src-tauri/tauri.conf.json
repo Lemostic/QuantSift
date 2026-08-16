@@ -42,6 +42,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false,
+        "customLanguageFiles": {
+          "SimpChinese": "nsis/SimpChinese.nsh"
+        }
+      },
+      "wix": {
+        "language": "zh-CN"
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "10.15",
       "dmg": {

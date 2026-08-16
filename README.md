@@ -57,6 +57,8 @@ python3 -m pytest sidecar -v
 
 Windows Smart App Control 会阻止 Rust 构建生成的临时 EXE/DLL。脚本检测到该状态时会打开相应的 Windows 安全页面，并等待用户手动关闭；脚本不会修改安全注册表或关闭 Defender。
 
+安装包内置简体中文与英文，安装向导自动跟随系统语言（中文系统显示简体中文）。
+
 产物默认位于：
 
 ```text
