@@ -3,6 +3,14 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { ModuleCategory } from "@/lib/registry";
 import type { DataSourceId } from "@/data/provider-registry";
 import {
+  DEFAULT_FACTOR_TAGS,
+  DEFAULT_INTRADAY_SCHEDULE,
+  type FactorConfig,
+  type IntradaySchedule,
+  type LlmProviderConfig,
+} from "@/ai/types";
+import { defaultFactorConfig } from "@/ai/factors";
+import {
   DEFAULT_PADDING,
   clampAxis,
   type PagePadding,
@@ -20,6 +28,13 @@ interface AppState {
   marketDataSource: DataSourceId;
   allowOfflineFallback: boolean;
 
+  // AI analysis config (persisted; keys stay local)
+  aiProviders: LlmProviderConfig[];
+  aiFactorConfig: FactorConfig;
+  aiResearchProvider: "offline" | "tavily";
+  aiResearchApiKey: string;
+  aiIntradaySchedule: IntradaySchedule;
+
   // Actions
   toggleSidebar: () => void;
   setActiveCategory: (cat: ModuleCategory | "all") => void;
@@ -29,6 +44,25 @@ interface AppState {
   resetContentPadding: () => void;
   setMarketDataSource: (source: DataSourceId) => void;
   setAllowOfflineFallback: (allow: boolean) => void;
+  setAiProviders: (providers: LlmProviderConfig[]) => void;
+  setAiFactorConfig: (config: FactorConfig) => void;
+  setAiResearchProvider: (provider: "offline" | "tavily") => void;
+  setAiResearchApiKey: (key: string) => void;
+  setAiIntradaySchedule: (schedule: IntradaySchedule) => void;
+}
+
+function defaultAiProviders(): LlmProviderConfig[] {
+  return [
+    {
+      id: "deepseek",
+      label: "DeepSeek",
+      baseUrl: "https://api.deepseek.com/v1",
+      apiKey: "",
+      model: "deepseek-chat",
+      enabled: false,
+      isDefault: true,
+    },
+  ];
 }
 
 export function migrateAppState(
@@ -107,6 +141,27 @@ export function migrateAppState(
     p.allowOfflineFallback = true;
   }
 
+  // ---- v8 ----
+  // AI analysis configuration defaults (multi-model keys, factor tags,
+  // research provider, intraday schedule).
+  if (fromVersion < 8) {
+    if (!Array.isArray(p.aiProviders)) {
+      p.aiProviders = defaultAiProviders();
+    }
+    if (!p.aiFactorConfig || typeof p.aiFactorConfig !== "object") {
+      p.aiFactorConfig = defaultFactorConfig(DEFAULT_FACTOR_TAGS);
+    }
+    if (p.aiResearchProvider !== "tavily") {
+      p.aiResearchProvider = "offline";
+    }
+    if (typeof p.aiResearchApiKey !== "string") {
+      p.aiResearchApiKey = "";
+    }
+    if (!p.aiIntradaySchedule || typeof p.aiIntradaySchedule !== "object") {
+      p.aiIntradaySchedule = { ...DEFAULT_INTRADAY_SCHEDULE };
+    }
+  }
+
   return p;
 }
 
@@ -120,6 +175,11 @@ export const useAppStore = create<AppState>()(
       contentPadding: DEFAULT_PADDING,
       marketDataSource: "eastmoney",
       allowOfflineFallback: true,
+      aiProviders: defaultAiProviders(),
+      aiFactorConfig: defaultFactorConfig(DEFAULT_FACTOR_TAGS),
+      aiResearchProvider: "offline",
+      aiResearchApiKey: "",
+      aiIntradaySchedule: { ...DEFAULT_INTRADAY_SCHEDULE },
 
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -148,11 +208,18 @@ export const useAppStore = create<AppState>()(
       setMarketDataSource: (marketDataSource) => set({ marketDataSource }),
       setAllowOfflineFallback: (allowOfflineFallback) =>
         set({ allowOfflineFallback }),
+      setAiProviders: (aiProviders) => set({ aiProviders }),
+      setAiFactorConfig: (aiFactorConfig) => set({ aiFactorConfig }),
+      setAiResearchProvider: (aiResearchProvider) =>
+        set({ aiResearchProvider }),
+      setAiResearchApiKey: (aiResearchApiKey) => set({ aiResearchApiKey }),
+      setAiIntradaySchedule: (aiIntradaySchedule) =>
+        set({ aiIntradaySchedule }),
     }),
     {
       name: "quantsift.app-state.v1",
       storage: createJSONStorage(() => localStorage),
-      version: 7,
+      version: 8,
       partialize: (s) => ({
         theme: s.theme,
         recentModules: s.recentModules,
@@ -160,6 +227,11 @@ export const useAppStore = create<AppState>()(
         contentPadding: s.contentPadding,
         marketDataSource: s.marketDataSource,
         allowOfflineFallback: s.allowOfflineFallback,
+        aiProviders: s.aiProviders,
+        aiFactorConfig: s.aiFactorConfig,
+        aiResearchProvider: s.aiResearchProvider,
+        aiResearchApiKey: s.aiResearchApiKey,
+        aiIntradaySchedule: s.aiIntradaySchedule,
       }),
       migrate: migrateAppState,
     },

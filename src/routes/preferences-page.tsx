@@ -1,16 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowCounterClockwise,
   ArrowsHorizontal,
   ArrowsVertical,
+  Brain,
   Check,
+  ClockCountdown,
   Database,
   Eraser,
   HardDrives,
+  Key,
   Palette,
+  Plus,
+  Robot,
   SlidersHorizontal,
   Sparkle,
+  Trash,
   WifiHigh,
   Warning,
 } from "@phosphor-icons/react";
@@ -31,6 +37,13 @@ import { registry } from "@/data/provider-registry";
 import { getBrowserBarCache } from "@/cache/browser-store";
 import { cacheStats } from "@/cache/service";
 import type { CacheStats } from "@/cache/service";
+import {
+  DEFAULT_FACTOR_TAGS,
+  type FactorConfig,
+  type FactorTag,
+  type IntradaySchedule,
+  type LlmProviderConfig,
+} from "@/ai/types";
 
 export function PreferencesPage() {
   const contentPadding = useAppStore((s) => s.contentPadding);
@@ -45,6 +58,16 @@ export function PreferencesPage() {
   const setAllowOfflineFallback = useAppStore(
     (s) => s.setAllowOfflineFallback,
   );
+  const aiProviders = useAppStore((s) => s.aiProviders);
+  const setAiProviders = useAppStore((s) => s.setAiProviders);
+  const aiFactorConfig = useAppStore((s) => s.aiFactorConfig);
+  const setAiFactorConfig = useAppStore((s) => s.setAiFactorConfig);
+  const aiResearchProvider = useAppStore((s) => s.aiResearchProvider);
+  const setAiResearchProvider = useAppStore((s) => s.setAiResearchProvider);
+  const aiResearchApiKey = useAppStore((s) => s.aiResearchApiKey);
+  const setAiResearchApiKey = useAppStore((s) => s.setAiResearchApiKey);
+  const aiIntradaySchedule = useAppStore((s) => s.aiIntradaySchedule);
+  const setAiIntradaySchedule = useAppStore((s) => s.setAiIntradaySchedule);
 
   return (
     <div
@@ -78,6 +101,25 @@ export function PreferencesPage() {
       </SettingsGroup>
 
       <BarCacheSettings />
+
+      <LlmProviderSettings providers={aiProviders} onChange={setAiProviders} />
+
+      <AiFactorSettings
+        config={aiFactorConfig}
+        onChange={setAiFactorConfig}
+      />
+
+      <AiResearchSettings
+        provider={aiResearchProvider}
+        apiKey={aiResearchApiKey}
+        onProviderChange={setAiResearchProvider}
+        onApiKeyChange={setAiResearchApiKey}
+      />
+
+      <AiScheduleSettings
+        schedule={aiIntradaySchedule}
+        onChange={setAiIntradaySchedule}
+      />
 
       <PaddingPreview value={contentPadding} />
 
@@ -157,6 +199,371 @@ export function PreferencesPage() {
 // ---------------------------------------------------------------------------
 // Live preview
 // ---------------------------------------------------------------------------
+
+function LlmProviderSettings({
+  providers,
+  onChange,
+}: {
+  providers: LlmProviderConfig[];
+  onChange: (providers: LlmProviderConfig[]) => void;
+}) {
+  const update = (index: number, patch: Partial<LlmProviderConfig>) => {
+    onChange(
+      providers.map((provider, i) => (i === index ? { ...provider, ...patch } : provider)),
+    );
+  };
+
+  const addProvider = () => {
+    onChange([
+      ...providers,
+      {
+        id: `model-${Date.now().toString(36)}`,
+        label: "新模型",
+        baseUrl: "https://api.deepseek.com/v1",
+        apiKey: "",
+        model: "deepseek-chat",
+        enabled: false,
+        isDefault: providers.length === 0,
+      },
+    ]);
+  };
+
+  const removeProvider = (index: number) => {
+    onChange(providers.filter((_, i) => i !== index));
+  };
+
+  return (
+    <SettingsGroup
+      title="AI 分析模型"
+      description="配置一个或多个 OpenAI 兼容模型（DeepSeek、通义、Moonshot、OpenAI 等）。分析时所有已启用且填写密钥的模型会并行给出结论，最终取共识信号。密钥仅保存在本机，界面显示为掩码。"
+      icon={<Robot className="h-4 w-4" />}
+    >
+      <div className="space-y-3">
+        {providers.map((provider, index) => (
+          <div
+            key={provider.id}
+            className="rounded-lg border border-border/60 bg-background/40 p-3"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={provider.enabled}
+                  onChange={(event) => update(index, { enabled: event.target.checked })}
+                  className="h-3.5 w-3.5 shrink-0 accent-primary"
+                  aria-label={`启用 ${provider.label}`}
+                />
+                <input
+                  value={provider.label}
+                  onChange={(event) => update(index, { label: event.target.value })}
+                  className="w-28 rounded-md border border-border/60 bg-background px-2 py-1 text-xs focus:border-primary/50 focus:outline-none"
+                  aria-label="模型名称"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => removeProvider(index)}
+                  className="grid h-7 w-7 place-items-center text-foreground-subtle transition-colors hover:text-accent-rose"
+                  aria-label={`删除 ${provider.label}`}
+                >
+                  <Trash size={14} />
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <Field
+                label="Base URL"
+                value={provider.baseUrl}
+                onChange={(value) => update(index, { baseUrl: value })}
+              />
+              <Field
+                label="Model"
+                value={provider.model}
+                onChange={(value) => update(index, { model: value })}
+              />
+            </div>
+            <div className="mt-2">
+              <label className="block text-[10px] text-foreground-subtle">
+                API Key（本地保存，掩码显示）
+              </label>
+              <div className="relative mt-1">
+                <Key size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-foreground-subtle" />
+                <input
+                  type="password"
+                  value={provider.apiKey}
+                  onChange={(event) => update(index, { apiKey: event.target.value })}
+                  placeholder="sk-..."
+                  className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-7 pr-2 font-mono text-xs focus:border-primary/50 focus:outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addProvider}
+          className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-accent"
+        >
+          <Plus size={14} />
+          添加模型
+        </button>
+      </div>
+    </SettingsGroup>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-[10px] text-foreground-subtle">{label}</span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-1 w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs focus:border-primary/50 focus:outline-none"
+      />
+    </label>
+  );
+}
+
+function AiFactorSettings({
+  config,
+  onChange,
+}: {
+  config: FactorConfig;
+  onChange: (config: FactorConfig) => void;
+}) {
+  const allTags = useMemo(() => {
+    const builtIn = DEFAULT_FACTOR_TAGS;
+    const custom = config.tags
+      .filter((setting) => !builtIn.some((tag) => tag.id === setting.tagId))
+      .map(
+        (setting): FactorTag => ({
+          id: setting.tagId,
+          label: setting.tagId,
+          description: "自定义因子",
+        }),
+      );
+    return [...builtIn, ...custom];
+  }, [config.tags]);
+
+  const toggle = (tagId: string) => {
+    onChange({
+      ...config,
+      tags: config.tags.map((setting) =>
+        setting.tagId === tagId
+          ? { ...setting, enabled: !setting.enabled }
+          : setting,
+      ),
+    });
+  };
+
+  return (
+    <SettingsGroup
+      title="随机因子"
+      description="每次智能扫描会基于种子为启用的因子生成随机强调角度（偏多/偏空/中性），覆盖全球市场、国内市场与政策面等维度；种子随会话留存，可复现。随机度 0 表示不使用随机波动。"
+      icon={<Brain className="h-4 w-4" />}
+    >
+      <div className="flex flex-wrap gap-2">
+        {allTags.map((tag) => {
+          const enabled =
+            config.tags.find((setting) => setting.tagId === tag.id)?.enabled ??
+            false;
+          return (
+            <button
+              key={tag.id}
+              type="button"
+              aria-pressed={enabled}
+              title={tag.description}
+              onClick={() => toggle(tag.id)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-[10px] transition-colors",
+                enabled
+                  ? "border-primary/40 bg-primary/[0.08] text-primary"
+                  : "border-border/60 text-foreground-muted hover:border-border",
+              )}
+            >
+              {tag.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-foreground-subtle">随机强调强度</span>
+          <span className="font-mono text-[10px] text-foreground-muted">
+            {config.randomness}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={config.randomness}
+          onChange={(event) =>
+            onChange({ ...config, randomness: Number(event.target.value) })
+          }
+          className="mt-2 h-1 w-full cursor-pointer appearance-none rounded-full bg-border/60 accent-primary"
+        />
+      </div>
+    </SettingsGroup>
+  );
+}
+
+function AiResearchSettings({
+  provider,
+  apiKey,
+  onProviderChange,
+  onApiKeyChange,
+}: {
+  provider: "offline" | "tavily";
+  apiKey: string;
+  onProviderChange: (provider: "offline" | "tavily") => void;
+  onApiKeyChange: (key: string) => void;
+}) {
+  return (
+    <SettingsGroup
+      title="网络研究"
+      description="分析前先抓取网络研究简报并随会话本地留存，用于提升模型结论的信息量。离线样本无需密钥；Tavily 需要 API Key。"
+      icon={<WifiHigh className="h-4 w-4" />}
+    >
+      <div className="grid gap-2 sm:grid-cols-2">
+        <ProviderOption
+          active={provider === "offline"}
+          icon={<Database size={18} className="text-primary" />}
+          title="离线样本"
+          detail="固定简报，仅用于演示与测试，不依赖网络。"
+          onClick={() => onProviderChange("offline")}
+        />
+        <ProviderOption
+          active={provider === "tavily"}
+          icon={<WifiHigh size={18} className="text-primary" />}
+          title="Tavily 实时搜索"
+          detail="真实网络搜索，需配置 API Key。"
+          onClick={() => onProviderChange("tavily")}
+        />
+      </div>
+      {provider === "tavily" && (
+        <div className="mt-3">
+          <label className="block text-[10px] text-foreground-subtle">
+            Tavily API Key（本地保存）
+          </label>
+          <div className="relative mt-1">
+            <Key size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-foreground-subtle" />
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(event) => onApiKeyChange(event.target.value)}
+              placeholder="tvly-..."
+              className="w-full rounded-md border border-border/60 bg-background py-1.5 pl-7 pr-2 font-mono text-xs focus:border-primary/50 focus:outline-none"
+            />
+          </div>
+        </div>
+      )}
+    </SettingsGroup>
+  );
+}
+
+function AiScheduleSettings({
+  schedule,
+  onChange,
+}: {
+  schedule: IntradaySchedule;
+  onChange: (schedule: IntradaySchedule) => void;
+}) {
+  const timeLabel = (minutes: number) =>
+    `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+
+  return (
+    <SettingsGroup
+      title="智能扫描（交易时段）"
+      description="在 A 股交易时段内按设定间隔自动对“参与智能分析”的标的执行 AI 推荐扫描并留存会话。仅工作日触发，同一时间槽只执行一次。"
+      icon={<ClockCountdown className="h-4 w-4" />}
+    >
+      <label className="flex items-center justify-between gap-4 border-y border-border/60 py-3">
+        <span>
+          <span className="block text-xs font-medium">启用定时智能扫描</span>
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+            关闭后仅手动触发。
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={schedule.enabled}
+          onChange={(event) =>
+            onChange({ ...schedule, enabled: event.target.checked })
+          }
+          className="h-4 w-4 shrink-0 accent-primary"
+        />
+      </label>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+        <label className="block">
+          <span className="text-[10px] text-foreground-subtle">间隔（分钟）</span>
+          <select
+            value={schedule.intervalMinutes}
+            onChange={(event) =>
+              onChange({
+                ...schedule,
+                intervalMinutes: Number(event.target.value),
+              })
+            }
+            className="mt-1 w-full rounded-md border border-border/60 bg-background px-2 py-1.5 text-xs focus:border-primary/50 focus:outline-none"
+          >
+            {[5, 10, 15, 30, 60].map((value) => (
+              <option key={value} value={value}>
+                每 {value} 分钟
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[10px] text-foreground-subtle">开始时间</span>
+          <input
+            type="time"
+            value={timeLabel(schedule.startMinutes)}
+            onChange={(event) => {
+              const [hour, minute] = event.target.value.split(":").map(Number);
+              onChange({
+                ...schedule,
+                startMinutes: hour * 60 + minute,
+              });
+            }}
+            className="mt-1 w-full rounded-md border border-border/60 bg-background px-2 py-1.5 font-mono text-xs focus:border-primary/50 focus:outline-none"
+          />
+        </label>
+        <label className="block">
+          <span className="text-[10px] text-foreground-subtle">结束时间</span>
+          <input
+            type="time"
+            value={timeLabel(schedule.endMinutes)}
+            onChange={(event) => {
+              const [hour, minute] = event.target.value.split(":").map(Number);
+              onChange({
+                ...schedule,
+                endMinutes: hour * 60 + minute,
+              });
+            }}
+            className="mt-1 w-full rounded-md border border-border/60 bg-background px-2 py-1.5 font-mono text-xs focus:border-primary/50 focus:outline-none"
+          />
+        </label>
+      </div>
+      <p className="mt-2 font-mono text-[9px] text-foreground-subtle">
+        {timeLabel(schedule.startMinutes)}–{timeLabel(schedule.endMinutes)} · 每{" "}
+        {schedule.intervalMinutes} 分钟 · 工作日
+      </p>
+    </SettingsGroup>
+  );
+}
 
 function BarCacheSettings() {
   const [stats, setStats] = useState<CacheStats | null>(null);

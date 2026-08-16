@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useWatchlist } from "@/watchlist/use-watchlist";
 import { useAutomaticScan } from "@/scans/use-scan-center";
 import { useAutomaticAlertDispatch } from "@/alerts/use-alert-center";
+import { useIntelligentAutoScan } from "@/ai/use-analysis-center";
 
 interface BackendAppInfo {
   name: string;
@@ -26,8 +27,12 @@ export function AppShell() {
   const activeInstrumentIds = watchlist.entries
     .filter((entry) => entry.enabled)
     .map((entry) => entry.instrumentId);
+  const autoAnalyzeIds = watchlist.entries
+    .filter((entry) => entry.enabled && entry.autoAnalyze)
+    .map((entry) => entry.instrumentId);
   useAutomaticScan(activeInstrumentIds);
   useAutomaticAlertDispatch();
+  useIntelligentAutoScan(autoAnalyzeIds);
 
   useEffect(() => {
     invoke<BackendAppInfo>("app_info")

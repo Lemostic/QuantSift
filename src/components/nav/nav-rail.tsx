@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   BellSimpleRinging,
+  Brain,
   Briefcase,
   CalendarDots,
   ChartLine,
@@ -30,6 +31,7 @@ const WORKSPACE_NAV: NavItem[] = [
   { to: "/watchlist", label: "我的观察列表", shortLabel: "自选", icon: ListChecks },
   { to: "/portfolio", label: "持仓研究", shortLabel: "持仓", icon: Briefcase },
   { to: "/backtest", label: "回测研究", shortLabel: "回测", icon: ChartLine },
+  { to: "/intelligence", label: "智能分析", shortLabel: "智能", icon: Brain },
   { to: "/scans", label: "自动扫描", shortLabel: "扫描", icon: CalendarDots },
   { to: "/alerts", label: "提醒中心", shortLabel: "提醒", icon: BellSimpleRinging },
 ];

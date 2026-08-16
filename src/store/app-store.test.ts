@@ -46,4 +46,31 @@ describe("app store migration", () => {
       allowOfflineFallback: true,
     });
   });
+
+  it("adds v8 AI configuration defaults to pre-v8 state", () => {
+    const migrated = migrateAppState(
+      { marketDataSource: "eastmoney", allowOfflineFallback: true },
+      7,
+    ) as Record<string, unknown>;
+
+    expect(migrated.aiProviders).toEqual([
+      expect.objectContaining({
+        id: "deepseek",
+        enabled: false,
+        isDefault: true,
+      }),
+    ]);
+    expect(migrated.aiResearchProvider).toBe("offline");
+    expect(migrated.aiResearchApiKey).toBe("");
+    expect(migrated.aiIntradaySchedule).toMatchObject({
+      enabled: false,
+      intervalMinutes: 15,
+      startMinutes: 540,
+      endMinutes: 900,
+    });
+    expect(migrated.aiFactorConfig).toMatchObject({
+      randomness: 30,
+      tags: expect.any(Array),
+    });
+  });
 });

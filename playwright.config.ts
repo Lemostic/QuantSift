@@ -9,6 +9,9 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   reporter: "list",
+  // 本机 Vite 冷编译较慢，放宽断言与用例超时。
+  expect: { timeout: 15_000 },
+  timeout: 90_000,
   use: {
     baseURL: "http://localhost:1420",
     viewport: { width: 1280, height: 800 },
@@ -18,6 +21,6 @@ export default defineConfig({
     command: "pnpm dev",
     url: "http://localhost:1420",
     reuseExistingServer: true,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });

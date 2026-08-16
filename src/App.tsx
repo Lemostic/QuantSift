@@ -27,6 +27,11 @@ const BacktestPage = lazy(() =>
     default: module.BacktestPage,
   })),
 );
+const IntelligencePage = lazy(() =>
+  import("@/routes/intelligence-page").then((module) => ({
+    default: module.IntelligencePage,
+  })),
+);
 const PreferencesPage = lazy(() =>
   import("@/routes/preferences-page").then((module) => ({
     default: module.PreferencesPage,
@@ -47,6 +52,7 @@ const router = createBrowserRouter([
       { path: "watchlist", element: <WatchlistPage /> },
       { path: "portfolio", element: <PortfolioPage /> },
       { path: "backtest", element: <BacktestPage /> },
+      { path: "intelligence", element: <IntelligencePage /> },
       { path: "scans", element: <ScansPage /> },
       { path: "alerts", element: <AlertsPage /> },
       { path: "modules/preferences", element: <PreferencesPage /> },
