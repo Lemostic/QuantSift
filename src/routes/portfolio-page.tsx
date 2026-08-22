@@ -6,8 +6,10 @@ import {
   Briefcase,
   Calculator,
   ChartLineUp,
+  CheckCircle,
   CurrencyCny,
   FloppyDisk,
+  MagnifyingGlass,
   NotePencil,
   Plus,
   ShieldWarning,
@@ -19,6 +21,7 @@ import { configuredProvider } from "@/data/provider-registry";
 import { loadRecommendations } from "@/data/recommendation-service";
 import type { Instrument, Recommendation } from "@/quant/types";
 import { usePortfolio } from "@/portfolio/use-portfolio";
+import { useWatchlist } from "@/watchlist/use-watchlist";
 import {
   buildPositionSnapshot,
   summarizePortfolio,
@@ -83,6 +86,7 @@ function formatMoney(value: number) {
 
 export function PortfolioPage() {
   const portfolio = usePortfolio();
+  const watchlist = useWatchlist();
   const [catalog, setCatalog] = useState<Instrument[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -151,6 +155,15 @@ export function PortfolioPage() {
     [portfolio.positions],
   );
   const availableInstruments = catalog.filter((item) => !existingIds.has(item.id));
+  const watchlistInstruments = useMemo(
+    () =>
+      watchlist.entries
+        .map((entry) => instrumentsById.get(entry.instrumentId))
+        .filter((instrument): instrument is Instrument =>
+          Boolean(instrument && !existingIds.has(instrument.id)),
+        ),
+    [watchlist.entries, instrumentsById, existingIds],
+  );
 
   useEffect(() => {
     if (creating) return;
@@ -206,11 +219,7 @@ export function PortfolioPage() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={beginCreate}
-          disabled={availableInstruments.length === 0}
-          className="gap-2 active:scale-[0.98]"
-        >
+        <Button onClick={beginCreate} className="gap-2 active:scale-[0.98]">
           <Plus size={15} weight="bold" />
           添加持仓
         </Button>
@@ -340,8 +349,9 @@ export function PortfolioPage() {
             <PositionEditor
               key="create"
               title="新增持仓"
-              initial={emptyDraft(availableInstruments[0]?.id)}
+              initial={emptyDraft("")}
               instruments={availableInstruments}
+              watchlistInstruments={watchlistInstruments}
               recommendations={recommendationsById}
               onSave={(draft) => void savePosition(draft)}
               onCancel={() => {
@@ -357,6 +367,7 @@ export function PortfolioPage() {
               instruments={catalog.filter(
                 (item) => item.id === selectedPosition.instrumentId,
               )}
+              watchlistInstruments={[]}
               recommendations={recommendationsById}
               lockedInstrument
               snapshot={snapshotById.get(selectedPosition.instrumentId)}
@@ -549,6 +560,7 @@ function PositionEditor({
   title,
   initial,
   instruments,
+  watchlistInstruments,
   recommendations,
   lockedInstrument,
   snapshot,
@@ -557,7 +569,10 @@ function PositionEditor({
 }: {
   title: string;
   initial: PortfolioPositionDraft;
+  /** 可添加的候选（目录，排除已持仓）。 */
   instruments: Instrument[];
+  /** 自选标的（快速添加入口）。 */
+  watchlistInstruments: Instrument[];
   recommendations: Map<string, Recommendation>;
   lockedInstrument?: boolean;
   snapshot?: PositionSnapshot;
@@ -565,9 +580,58 @@ function PositionEditor({
   onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState(initial);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Instrument[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const selectedInstrument = instruments.find(
     (item) => item.id === draft.instrumentId,
   );
+
+  // 直接搜索全市场添加（防抖 300ms），与自选页一致。
+  useEffect(() => {
+    const keyword = searchQuery.trim();
+    if (!keyword) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSearchLoading(true);
+    const timer = window.setTimeout(() => {
+      const provider = configuredProvider();
+      const task = provider.searchInstruments
+        ? provider.searchInstruments(keyword)
+        : Promise.resolve([]);
+      task
+        .then((results) => {
+          if (!cancelled) setSearchResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setSearchResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const pick = (instrument: Instrument) => {
+    const price = recommendations.get(instrument.id)?.price ?? 0;
+    setDraft((current) => ({
+      ...current,
+      instrumentId: instrument.id,
+      averageCost: price > 0 ? price : current.averageCost,
+    }));
+    setSearchQuery("");
+    setSearchResults([]);
+  };
+
+  const pickerCandidates =
+    searchQuery.trim().length > 0 ? searchResults : instruments;
   const recommendation = recommendations.get(draft.instrumentId);
   const preview =
     recommendation && draft.quantity > 0 && draft.averageCost > 0
@@ -603,26 +667,101 @@ function PositionEditor({
       </div>
 
       <div className="space-y-3 px-4 py-4">
-        <label className="block">
+        <div>
           <span className="text-[10px] font-medium">持仓标的</span>
-          <select
-            value={draft.instrumentId}
-            disabled={lockedInstrument}
-            onChange={(event) => {
-              const instrumentId = event.target.value;
-              const price = recommendations.get(instrumentId)?.price ?? 0;
-              patch({ instrumentId, averageCost: price });
-            }}
-            className="mt-1.5 h-9 w-full border border-input bg-background px-2.5 text-xs outline-none focus:border-primary disabled:opacity-70"
-          >
-            {instruments.length === 0 && <option value="">没有可添加的标的</option>}
-            {instruments.map((instrument) => (
-              <option key={instrument.id} value={instrument.id}>
-                {instrument.name} · {instrument.symbol}
-              </option>
-            ))}
-          </select>
-        </label>
+          {lockedInstrument ? (
+            <div className="mt-1.5 flex h-9 items-center justify-between rounded border border-input bg-background/60 px-2.5 text-xs">
+              <span className="truncate">
+                {selectedInstrument?.name ?? draft.instrumentId}
+              </span>
+              <span className="shrink-0 font-mono text-[9px] text-foreground-subtle">
+                {selectedInstrument?.symbol}
+              </span>
+            </div>
+          ) : (
+            <>
+              <div className="relative mt-1.5">
+                <MagnifyingGlass
+                  size={13}
+                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground-subtle"
+                />
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="搜索代码或名称（如 017811）添加任意基金/股票"
+                  className="h-9 w-full border border-input bg-background pl-8 pr-3 text-[11px] outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+                />
+              </div>
+
+              {!searchQuery.trim() && watchlistInstruments.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-[9px] text-foreground-subtle">
+                    从自选快速添加
+                  </div>
+                  <div className="mt-1 flex max-h-16 flex-wrap gap-1 overflow-y-auto">
+                    {watchlistInstruments.map((instrument) => (
+                      <button
+                        key={instrument.id}
+                        type="button"
+                        onClick={() => pick(instrument)}
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-[9px] transition-colors",
+                          draft.instrumentId === instrument.id
+                            ? "border-primary/50 bg-primary/[0.08] text-primary"
+                            : "border-border/60 text-foreground-muted hover:border-border hover:text-foreground",
+                        )}
+                      >
+                        {instrument.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-2 max-h-44 divide-y divide-border/50 overflow-y-auto rounded-md border border-border/60">
+                {searchLoading ? (
+                  <div className="px-3 py-4 text-center text-[10px] text-foreground-muted">
+                    正在搜索全市场…
+                  </div>
+                ) : pickerCandidates.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-[10px] text-foreground-muted">
+                    {searchQuery.trim()
+                      ? "没有找到匹配的标的"
+                      : "暂无可用标的，输入代码或名称搜索添加"}
+                  </div>
+                ) : (
+                  pickerCandidates.map((instrument) => (
+                    <button
+                      key={instrument.id}
+                      type="button"
+                      onClick={() => pick(instrument)}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-accent/60",
+                        draft.instrumentId === instrument.id && "bg-primary/[0.06]",
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-[11px] font-medium">
+                          {instrument.name}
+                        </span>
+                        <span className="mt-0.5 block font-mono text-[8px] text-foreground-subtle">
+                          {instrument.symbol} ·{" "}
+                          {instrument.kind === "fund" ? "基金" : "A 股"}
+                          {recommendations.has(instrument.id)
+                            ? " · 有研究信号"
+                            : " · 待加载行情"}
+                        </span>
+                      </span>
+                      {draft.instrumentId === instrument.id && (
+                        <CheckCircle size={14} className="shrink-0 text-primary" />
+                      )}
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <NumberField

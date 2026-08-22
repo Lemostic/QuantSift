@@ -106,6 +106,33 @@ export class LocalWatchlistRepository implements WatchlistRepository {
     });
   }
 
+  /**
+   * 一次性清理内置示例自选（默认种子与早期迁移添加的 AI 主题基金）。
+   * 只清除带明确"示例"标记或已知迁移 note 的条目，用户真实添加的不动。
+   */
+  async applyBuiltinCleanup(): Promise<void> {
+    const document = this.read();
+    const marker = "2026-08-clear-builtin-seeds";
+    if (document.appliedMigrations.includes(marker)) return;
+    const seededIds = new Set([
+      "CN:510300",
+      "CN:600519",
+      "CN:159915",
+      "CN:012734",
+    ]);
+    document.entries = document.entries.filter((entry) => {
+      const isSeededSample =
+        seededIds.has(entry.instrumentId) &&
+        entry.tags.some((tag) => tag === "示例");
+      const isMigrationEntry =
+        entry.instrumentId === "CN:012734" &&
+        entry.note === "人工智能主题基金，等待回踩确认";
+      return !isSeededSample && !isMigrationEntry;
+    });
+    document.appliedMigrations.push(marker);
+    this.write(document);
+  }
+
   async applyMigration(
     migrationId: string,
     instrumentIds: string[],

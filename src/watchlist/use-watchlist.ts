@@ -6,7 +6,6 @@ import {
 } from "./repository";
 
 const WATCHLIST_CHANGED_EVENT = "quantsift:watchlist-changed";
-const DEFAULT_INSTRUMENT_IDS = ["CN:510300", "CN:600519", "CN:159915", "CN:012734"];
 
 let browserRepository: LocalWatchlistRepository | null = null;
 
@@ -29,8 +28,8 @@ export function useWatchlist() {
   const reload = useCallback(async () => {
     try {
       const repository = getRepository();
-      await repository.seedIfMissing(DEFAULT_INSTRUMENT_IDS);
-      await repository.applyMigration("2026-08-add-012734", ["CN:012734"]);
+      // 自选从空开始：清理历史内置示例（仅一次），真实数据完全由用户添加。
+      await repository.applyBuiltinCleanup();
       setEntries(await repository.list());
       setError(null);
     } catch (cause) {

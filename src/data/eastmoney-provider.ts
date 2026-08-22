@@ -1,5 +1,6 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type { MarketDataProvider } from "./market-data-provider";
+import { mergeInstruments, getInstrumentDirectory } from "./instrument-directory";
 import type { DailyBar, Instrument } from "@/quant/types";
 
 /**
@@ -107,7 +108,9 @@ export function createEastMoneyMarketDataProvider(
     async listInstruments(): Promise<Instrument[]> {
       try {
         const values = await invokeFn("eastmoney_list_instruments", {});
-        return (values as MarketInstrument[]).map(toInstrument);
+        const catalog = (values as MarketInstrument[]).map(toInstrument);
+        // 合并目录外标的（用户搜索添加过的），保证全站可解析。
+        return getInstrumentDirectory().mergedWith(catalog);
       } catch (cause) {
         throw normalizeError(cause);
       }
@@ -118,11 +121,19 @@ export function createEastMoneyMarketDataProvider(
       limit: number,
     ): Promise<DailyBar[]> {
       try {
-        const values = await invokeFn("eastmoney_get_daily_bars", {
+        // 目录外标的把元数据带给原生命令，用于解析行情通道
+        // （场外基金走净值、股票/ETF 走 K 线）。
+        const known = getInstrumentDirectory().lookup(instrumentId);
+        const args: Record<string, unknown> = {
           instrumentId,
           limit,
           source,
-        });
+        };
+        if (known) {
+          args.exchange = known.exchange;
+          args.kind = known.kind;
+        }
+        const values = await invokeFn("eastmoney_get_daily_bars", args);
         return (values as MarketBar[]).map(toDailyBar);
       } catch (cause) {
         throw normalizeError(cause);
@@ -134,7 +145,10 @@ export function createEastMoneyMarketDataProvider(
         const values = await invokeFn("eastmoney_search_instruments", {
           keyword: query,
         });
-        return (values as MarketInstrument[]).map(toInstrument);
+        const instruments = (values as MarketInstrument[]).map(toInstrument);
+        // 搜索命中即入目录，后续添加/持仓/图表都能解析。
+        mergeInstruments(instruments);
+        return instruments;
       } catch (cause) {
         throw normalizeError(cause);
       }

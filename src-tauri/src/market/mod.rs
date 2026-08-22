@@ -19,7 +19,7 @@ use futures::FutureExt;
 use serde::Serialize;
 use std::sync::OnceLock;
 
-use catalog::{lookup_instrument, shanghai_iso_now, shanghai_today, CatalogEntry};
+use catalog::{lookup_instrument, shanghai_iso_now, shanghai_today};
 use parse::{parse_fund_nav_response, parse_kline_response, KlineRow, NavRow};
 
 /// Boxed future alias so heterogeneous fetchers share one type in join_all.
@@ -39,7 +39,7 @@ pub struct MarketInstrument {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketBar {
-    pub instrument_id: &'static str,
+    pub instrument_id: String,
     pub trade_date: String,
     pub open: f64,
     pub high: f64,
@@ -52,9 +52,13 @@ pub struct MarketBar {
 }
 
 impl MarketBar {
-    fn from_kline(entry: &CatalogEntry, row: KlineRow, provider: &'static str) -> Self {
+    fn from_kline(
+        instrument_id: String,
+        row: KlineRow,
+        provider: &'static str,
+    ) -> Self {
         MarketBar {
-            instrument_id: entry.id,
+            instrument_id,
             trade_date: row.trade_date,
             open: row.open,
             high: row.high,
@@ -67,9 +71,13 @@ impl MarketBar {
         }
     }
 
-    fn from_nav(entry: &CatalogEntry, row: NavRow, provider: &'static str) -> Self {
+    fn from_nav(
+        instrument_id: String,
+        row: NavRow,
+        provider: &'static str,
+    ) -> Self {
         MarketBar {
-            instrument_id: entry.id,
+            instrument_id,
             trade_date: row.trade_date,
             open: row.nav,
             high: row.nav,
@@ -80,6 +88,50 @@ impl MarketBar {
             provider,
             fetched_at: shanghai_iso_now(),
         }
+    }
+}
+
+/// 为目录外标的解析行情通道。
+///
+/// exchange/kind 由前端搜索结果的元数据传入；缺失时按代码前缀推断。
+/// 返回 (market, otc_fund)：market 为 K 线市场前缀（1=沪, 0=深），
+/// otc_fund 为 true 时走基金净值通道。
+fn resolve_unknown_instrument(
+    symbol: &str,
+    exchange: Option<&str>,
+    kind: Option<&str>,
+) -> (Option<u8>, bool) {
+    if kind == Some("fund") && exchange == Some("OTC") {
+        return (None, true);
+    }
+    let market = match exchange {
+        Some("SSE") => Some(1),
+        Some("SZSE") => Some(0),
+        _ => infer_market_from_symbol(symbol),
+    };
+    match market {
+        Some(market) => (Some(market), false),
+        None => (None, true),
+    }
+}
+
+/// 无元数据时的代码前缀推断（仅作兜底，正常路径由前端传入元数据）。
+fn infer_market_from_symbol(symbol: &str) -> Option<u8> {
+    let first = symbol.chars().next()?;
+    match first {
+        // 沪市：60/68 开头股票与科创板、51/56/58 开头 ETF。
+        '5' | '6' => Some(1),
+        // 深市：000/001/002/003/300/301 股票、159/16x ETF。
+        '3' => Some(0),
+        '0' if symbol.starts_with("000")
+            || symbol.starts_with("001")
+            || symbol.starts_with("002")
+            || symbol.starts_with("003") =>
+        {
+            Some(0)
+        }
+        '1' if symbol.starts_with("159") || symbol.starts_with("16") => Some(0),
+        _ => None,
     }
 }
 
@@ -124,8 +176,9 @@ pub async fn eastmoney_get_daily_bars(
     instrument_id: String,
     limit: u32,
     source: Option<String>,
+    exchange: Option<String>,
+    kind: Option<String>,
 ) -> Result<Vec<MarketBar>, String> {
-    let entry = lookup_instrument(&instrument_id)?;
     let limit = limit.clamp(1, 500);
     let client = http_client()?;
     let today = shanghai_today();
@@ -138,7 +191,27 @@ pub async fn eastmoney_get_daily_bars(
         "auto"
     };
 
-    if entry.otc_fund {
+    // 目录内标的沿用目录元数据；目录外标的（用户搜索添加）用前端传入的
+    // exchange/kind 解析行情通道，缺失时按代码前缀兜底推断。
+    let (symbol, otc_fund, market) = match lookup_instrument(&instrument_id) {
+        Ok(entry) => (
+            entry.symbol.to_string(),
+            entry.otc_fund,
+            entry.market,
+        ),
+        Err(_) => {
+            let symbol = instrument_id
+                .strip_prefix("CN:")
+                .unwrap_or(instrument_id.as_str())
+                .to_string();
+            let (market, otc) =
+                resolve_unknown_instrument(&symbol, exchange.as_deref(), kind.as_deref());
+            (symbol, otc, market)
+        }
+    };
+    let instrument_id_owned = instrument_id;
+
+    if otc_fund {
         // The NAV endpoints cap each page at 20 rows (newest first), so the
         // requested tail may span several pages; an empty page ends the
         // history.
@@ -147,7 +220,7 @@ pub async fn eastmoney_get_daily_bars(
         let mut provider: &'static str = "eastmoney";
         for page in 1..=MAX_NAV_PAGES {
             let (page_rows, page_provider) =
-                client::fetch_fund_nav_with_fallback(client, entry.symbol, page).await?;
+                client::fetch_fund_nav_with_fallback(client, &symbol, page).await?;
             provider = page_provider;
             if page_rows.is_empty() {
                 break;
@@ -162,18 +235,16 @@ pub async fn eastmoney_get_daily_bars(
         rows.reverse();
         Ok(rows
             .into_iter()
-            .map(|row| MarketBar::from_nav(entry, row, provider))
+            .map(|row| MarketBar::from_nav(instrument_id_owned.clone(), row, provider))
             .collect())
     } else {
-        let market = entry
-            .market
-            .ok_or_else(|| format!("{} 缺少市场前缀", entry.id))?;
-        let target = client::KlineTarget::for_market(market, entry.symbol);
+        let market = market.ok_or_else(|| format!("{instrument_id_owned} 无法确定市场通道"))?;
+        let target = client::KlineTarget::for_market(market, &symbol);
         let (rows, provider) =
             client::fetch_kline_with_source(client, &target, limit, &today, source).await?;
         Ok(tail(rows, limit)
             .into_iter()
-            .map(|row| MarketBar::from_kline(entry, row, provider))
+            .map(|row| MarketBar::from_kline(instrument_id_owned.clone(), row, provider))
             .collect())
     }
 }
@@ -326,6 +397,67 @@ async fn run_source_checks() -> Vec<SourceCheck> {
     checks.extend(nav_checks);
     checks.push(search_check);
     checks
+}
+
+#[cfg(test)]
+mod resolution_tests {
+    use super::*;
+
+    #[test]
+    fn resolves_otc_funds_from_metadata() {
+        // 017811 东方人工智能主题混合C：场外基金。
+        assert_eq!(
+            resolve_unknown_instrument("017811", Some("OTC"), Some("fund")),
+            (None, true)
+        );
+        assert_eq!(
+            resolve_unknown_instrument("012734", Some("OTC"), Some("fund")),
+            (None, true)
+        );
+    }
+
+    #[test]
+    fn resolves_exchanges_from_metadata() {
+        assert_eq!(
+            resolve_unknown_instrument("600519", Some("SSE"), Some("stock")),
+            (Some(1), false)
+        );
+        assert_eq!(
+            resolve_unknown_instrument("000001", Some("SZSE"), Some("stock")),
+            (Some(0), false)
+        );
+        assert_eq!(
+            resolve_unknown_instrument("510300", Some("SSE"), Some("fund")),
+            (Some(1), false)
+        );
+    }
+
+    #[test]
+    fn infers_market_from_symbol_without_metadata() {
+        assert_eq!(infer_market_from_symbol("600519"), Some(1));
+        assert_eq!(infer_market_from_symbol("688981"), Some(1));
+        assert_eq!(infer_market_from_symbol("510300"), Some(1));
+        assert_eq!(infer_market_from_symbol("000001"), Some(0));
+        assert_eq!(infer_market_from_symbol("300750"), Some(0));
+        assert_eq!(infer_market_from_symbol("159915"), Some(0));
+        assert_eq!(infer_market_from_symbol("161725"), Some(0));
+        // 无法归类的 0/1 开头代码按场外基金净值处理。
+        assert_eq!(infer_market_from_symbol("017811"), None);
+        assert_eq!(infer_market_from_symbol("011479"), None);
+        assert_eq!(infer_market_from_symbol("abc"), None);
+    }
+
+    #[test]
+    fn resolver_falls_back_to_inference() {
+        assert_eq!(
+            resolve_unknown_instrument("600519", None, None),
+            (Some(1), false)
+        );
+        assert_eq!(
+            resolve_unknown_instrument("017811", None, None),
+            (None, true)
+        );
+    }
 }
 
 /// 立即体检（手动"重新检测"按钮使用，不做缓存）。

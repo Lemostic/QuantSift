@@ -20,8 +20,34 @@ export async function installTauriMock(page: Page): Promise<void> {
   }
   const contextProvider = createOfflineMarketContextProvider();
 
+  // 应用本身自选从空开始（无内置种子）；e2e 需要确定性数据，
+  // 这里预置与旧版一致的 4 个自选（不含 000001，spec 会搜索添加它）
+  // 与空持仓（不带"示例"标记，避免被清理迁移移除）。
+  const seedIds = ["CN:510300", "CN:600519", "CN:159915", "CN:012734"];
+  const watchlistSeed = {
+    version: 3,
+    appliedMigrations: [],
+    entries: seedIds.map((instrumentId) => {
+      const instrument = instruments.find((item) => item.id === instrumentId)!;
+      return {
+        instrumentId,
+        note: "",
+        tags: ["mock"],
+        enabled: true,
+        autoAnalyze: false,
+        addedAt: "2026-08-01T00:00:00.000Z",
+        instrument,
+      };
+    }).map(({ instrument, ...entry }) => entry),
+  };
+
   await page.addInitScript(
-    ({ instruments, bars, contextProvider }) => {
+    ({ instruments, bars, contextProvider, watchlistSeed }) => {
+      localStorage.setItem("quantsift.watchlist.v1", JSON.stringify(watchlistSeed));
+      localStorage.setItem(
+        "quantsift.portfolio.v1",
+        JSON.stringify({ version: 1, positions: [] }),
+      );
       (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {
         invoke: async (cmd: string, args?: Record<string, unknown>) => {
           if (cmd === "eastmoney_list_instruments") return instruments;
@@ -64,6 +90,6 @@ export async function installTauriMock(page: Page): Promise<void> {
         },
       };
     },
-    { instruments, bars: barsByInstrument, contextProvider },
+    { instruments, bars: barsByInstrument, contextProvider, watchlistSeed },
   );
 }

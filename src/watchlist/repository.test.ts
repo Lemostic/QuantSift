@@ -84,6 +84,59 @@ describe("LocalWatchlistRepository", () => {
     expect((await repository.list())[0].autoAnalyze).toBe(true);
   });
 
+  it("cleans built-in sample seeds once and keeps real entries", async () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      "quantsift.watchlist.v1",
+      JSON.stringify({
+        version: 3,
+        appliedMigrations: [],
+        entries: [
+          // 内置种子（带"示例"标记）与早期迁移条目应被清理。
+          {
+            instrumentId: "CN:510300",
+            note: "",
+            tags: ["示例"],
+            enabled: true,
+            autoAnalyze: false,
+            addedAt: "2026-01-01T00:00:00.000Z",
+          },
+          {
+            instrumentId: "CN:012734",
+            note: "人工智能主题基金，等待回踩确认",
+            tags: ["重点监控", "AI主题"],
+            enabled: true,
+            autoAnalyze: false,
+            addedAt: "2026-01-01T00:00:00.000Z",
+          },
+          // 用户真实添加的标的不受影响。
+          {
+            instrumentId: "CN:017811",
+            note: "真实持仓研究",
+            tags: [],
+            enabled: true,
+            autoAnalyze: true,
+            addedAt: "2026-08-20T10:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    const repository = new LocalWatchlistRepository(storage);
+
+    await repository.applyBuiltinCleanup();
+    expect((await repository.list()).map((entry) => entry.instrumentId)).toEqual([
+      "CN:017811",
+    ]);
+
+    // 只执行一次：再次调用不会误删用户后添加的相同代码。
+    await repository.add("CN:600519");
+    await repository.applyBuiltinCleanup();
+    expect((await repository.list()).map((entry) => entry.instrumentId)).toEqual([
+      "CN:017811",
+      "CN:600519",
+    ]);
+  });
+
   it("hydrates pre-v3 documents with autoAnalyze false", async () => {
     const storage = new MemoryStorage();
     storage.setItem(
