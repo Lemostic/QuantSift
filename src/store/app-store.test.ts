@@ -69,6 +69,35 @@ describe("app store migration", () => {
     }
   });
 
+  it("repairs missing factor settings for AI-added tags (v12)", () => {
+    const migrated = migrateAppState(
+      {
+        marketDataSource: "auto",
+        allowOfflineFallback: true,
+        aiFactorConfig: {
+          tags: [{ tagId: "policy", enabled: false }],
+          randomness: 30,
+        },
+        aiFactorCatalog: [
+          { id: "ai_extra", label: "AI 新增因子", description: "模型评审新增" },
+        ],
+      },
+      11,
+    ) as Record<string, unknown>;
+
+    const config = migrated.aiFactorConfig as {
+      tags: Array<{ tagId: string; enabled: boolean }>;
+    };
+    // 已存在的设置原样保留。
+    expect(
+      config.tags.find((setting) => setting.tagId === "policy")?.enabled,
+    ).toBe(false);
+    // AI 新增因子被补齐且默认启用。
+    expect(
+      config.tags.find((setting) => setting.tagId === "ai_extra")?.enabled,
+    ).toBe(true);
+  });
+
   it("adds v8 AI configuration defaults to pre-v8 state", () => {
     const migrated = migrateAppState(
       { marketDataSource: "eastmoney", allowOfflineFallback: true },

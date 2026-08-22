@@ -10,7 +10,7 @@ import {
   type IntradaySchedule,
   type LlmProviderConfig,
 } from "@/ai/types";
-import { defaultFactorConfig } from "@/ai/factors";
+import { defaultFactorConfig, ensureFactorTagSettings } from "@/ai/factors";
 import {
   DEFAULT_PADDING,
   clampAxis,
@@ -171,6 +171,20 @@ export function migrateAppState(
     }
   }
 
+  // ---- v12 ----
+  // 修复 AI 更新因子后无法激活的问题：目录里有、配置数组里没有的因子
+  // 设置一律补齐（默认启用）。
+  if (fromVersion < 12) {
+    const catalog = Array.isArray(p.aiFactorCatalog) ? p.aiFactorCatalog : [];
+    const config = p.aiFactorConfig as FactorConfig | undefined;
+    if (config && Array.isArray(config.tags)) {
+      p.aiFactorConfig = ensureFactorTagSettings(config, [
+        ...DEFAULT_FACTOR_TAGS,
+        ...(catalog as FactorTag[]),
+      ]);
+    }
+  }
+
   if (
     p.marketDataSource !== "auto" &&
     p.marketDataSource !== "eastmoney" &&
@@ -266,7 +280,7 @@ export const useAppStore = create<AppState>()(
     {
       name: "quantsift.app-state.v1",
       storage: createJSONStorage(() => localStorage),
-      version: 11,
+      version: 12,
       partialize: (s) => ({
         theme: s.theme,
         recentModules: s.recentModules,

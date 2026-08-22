@@ -25,6 +25,23 @@ export function defaultFactorConfig(tags: FactorTag[]): FactorConfig {
 }
 
 /**
+ * 把目录中存在但配置数组中缺失的因子设置补齐（新因子默认启用）。
+ * 用于 AI 增量新增因子后同步启用设置，以及修复历史存量数据；
+ * 已存在的设置保持不变。
+ */
+export function ensureFactorTagSettings(
+  config: FactorConfig,
+  tags: FactorTag[],
+): FactorConfig {
+  const existing = new Set(config.tags.map((setting) => setting.tagId));
+  const missing = tags
+    .filter((tag) => !existing.has(tag.id))
+    .map((tag) => ({ tagId: tag.id, enabled: true }));
+  if (missing.length === 0) return config;
+  return { ...config, tags: [...config.tags, ...missing] };
+}
+
+/**
  * 基于种子的随机因子变体：同一 seed + 同一配置 → 完全相同的变体；
  * 不同 seed → 不同变体；未启用的 tag 永不出现。
  *

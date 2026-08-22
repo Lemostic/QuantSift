@@ -57,6 +57,7 @@ import {
   presetById,
 } from "@/ai/provider-presets";
 import { refreshFactorCatalogWithAI } from "@/ai/factor-refresh";
+import { ensureFactorTagSettings } from "@/ai/factors";
 import { createInvokeLlmClient } from "@/ai/llm";
 import {
   readTemplateState,
@@ -393,14 +394,24 @@ function AiFactorSettings({
   }, [aiFactorCatalog]);
 
   const toggle = (tagId: string) => {
-    onChange({
-      ...config,
-      tags: config.tags.map((setting) =>
-        setting.tagId === tagId
-          ? { ...setting, enabled: !setting.enabled }
-          : setting,
-      ),
-    });
+    const existing = config.tags.find((setting) => setting.tagId === tagId);
+    if (existing) {
+      // 已有设置：翻转开关。
+      onChange({
+        ...config,
+        tags: config.tags.map((setting) =>
+          setting.tagId === tagId
+            ? { ...setting, enabled: !setting.enabled }
+            : setting,
+        ),
+      });
+    } else {
+      // 目录里有但配置数组缺失（AI 新增等）：补齐并默认启用。
+      onChange({
+        ...config,
+        tags: [...config.tags, { tagId, enabled: true }],
+      });
+    }
   };
 
   const refreshWithAI = async () => {
@@ -421,6 +432,8 @@ function AiFactorSettings({
       // 只留存内置之外的 AI 新增因子。
       const builtInIds = new Set(DEFAULT_FACTOR_TAGS.map((tag) => tag.id));
       setAiFactorCatalog(result.tags.filter((tag) => !builtInIds.has(tag.id)));
+      // 同步补齐启用设置：AI 新增因子默认激活，避免"看得见却选不了"。
+      onChange(ensureFactorTagSettings(config, result.tags));
       if (result.added.length > 0) {
         setRefreshNotice(
           `已新增 ${result.added.length} 个因子：${result.added.map((tag) => tag.label).join("、")}`,
