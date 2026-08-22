@@ -11,10 +11,12 @@ import {
   type Styles,
   type DeepPartial,
 } from "klinecharts";
-import type { DailyBar } from "@/quant/types";
+import type { DailyBar, Instrument } from "@/quant/types";
 import type { BuyTimingMarker, SellTimingMarker } from "@/quant/buy-timing";
 import { buildBuyTimingMarkers, buildSellTimingMarkers } from "@/quant/buy-timing";
+import type { KeyPoint } from "@/quant/key-points";
 import { computeFillBarSpace, computeLegendStats, filterBarsUpToToday } from "@/quant/indicators";
+import { KeyPointPanel } from "./key-point-panel";
 
 /* 指标配色：图例与图表线条共用同一套色值，保证所见即所注。 */
 export const CHART_COLORS = {
@@ -38,6 +40,12 @@ interface ProfessionalMarketChartProps {
   bars: DailyBar[];
   markers?: BuyTimingMarker[];
   sellMarkers?: SellTimingMarker[];
+  /** 关键点（本地规则识别）；悬停标记显示分析面板。 */
+  keyPoints?: KeyPoint[];
+  /** 悬停面板 AI 深度分析所需的标的（未传则不显示面板）。 */
+  instrument?: Instrument | null;
+  /** 面板上 "AI 分析此点" 按钮开关。 */
+  aiDeepEnabled?: boolean;
   height?: number;
   className?: string;
 }
@@ -433,6 +441,9 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
   bars,
   markers: externalMarkers,
   sellMarkers: externalSellMarkers,
+  keyPoints = [],
+  instrument = null,
+  aiDeepEnabled = false,
   height = 430,
   className,
 }: ProfessionalMarketChartProps) {
@@ -441,6 +452,8 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
   const [mode, setMode] = useState(() =>
     document.documentElement.classList.contains("dark") ? "dark" : "light",
   );
+  /** 当前悬停命中的关键点（无则 null）。 */
+  const [activeKeyPoint, setActiveKeyPoint] = useState<KeyPoint | null>(null);
 
   const sortedBars = useMemo(
     () =>
@@ -452,6 +465,14 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
   const klineData = useMemo(() => barsToKLineData(sortedBars), [sortedBars]);
   /** 十字光标命中的 K 线；null 表示未悬停（回退显示最新一根）。 */
   const [activeTradeDate, setActiveTradeDate] = useState<string | null>(null);
+  /** 只标记可见窗口内的关键点。 */
+  const visibleKeyPoints = useMemo(
+    () =>
+      keyPoints.filter((point) =>
+        sortedBars.some((bar) => bar.tradeDate === point.tradeDate),
+      ),
+    [keyPoints, sortedBars],
+  );
 
   // Calculate optimal barSpace to fill the container
   const barCount = sortedBars.length;
@@ -587,17 +608,54 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
       },
     } as never);
 
+    // ── Key-point marker circles ─────────────────────────────────
+    for (const point of visibleKeyPoints) {
+      const ts = toTimestamp(point.tradeDate);
+      const markerColor =
+        point.signal === "bullish"
+          ? "#22c58b"
+          : point.signal === "bearish"
+            ? "#f43f5e"
+            : "#f0b90b";
+      chart.createOverlay({
+        name: "circle",
+        groupId: "key_points",
+        paneId: "candle_pane",
+        points: [
+          {
+            timestamp: ts,
+            value: sortedBars.find((bar) => bar.tradeDate === point.tradeDate)?.high ?? 0,
+          },
+        ],
+        styles: {
+          circle: {
+            color: "rgba(255,255,255,0)",
+            borderColor: markerColor,
+            borderSize: 2,
+          },
+        } as never,
+      });
+    }
+
     // ── Crosshair readout ─────────────────────────────────────────
     const onCrosshairChange = (data?: unknown) => {
       const crosshair = data as Crosshair | undefined;
       if (!crosshair?.timestamp) {
         setActiveTradeDate(null);
+        setActiveKeyPoint(null);
         return;
       }
       const bar = sortedBars.find(
         (candidate) => toTimestamp(candidate.tradeDate) === crosshair.timestamp,
       );
       setActiveTradeDate(bar ? bar.tradeDate : null);
+      setActiveKeyPoint(
+        bar
+          ? (visibleKeyPoints.find(
+              (point) => point.tradeDate === bar.tradeDate,
+            ) ?? null)
+          : null,
+      );
     };
     chart.subscribeAction("onCrosshairChange", onCrosshairChange);
 
@@ -670,7 +728,7 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
       dispose(container);
       chartRef.current = null;
     };
-  }, [klineData, mode, bars, height, barCount]);
+  }, [klineData, mode, bars, height, barCount, visibleKeyPoints]);
 
   const readoutBar = useMemo(
     () =>
@@ -700,6 +758,14 @@ export const ProfessionalMarketChart = memo(function ProfessionalMarketChart({
       <div className="relative">
         <div ref={containerRef} className="w-full" style={{ height }} />
         <CrosshairReadout bar={readoutBar} changePct={readoutChangePct} />
+        {activeKeyPoint && instrument && (
+          <KeyPointPanel
+            point={activeKeyPoint}
+            instrument={instrument}
+            aiDeepEnabled={aiDeepEnabled}
+            onClose={() => setActiveKeyPoint(null)}
+          />
+        )}
       </div>
     </motion.div>
   );

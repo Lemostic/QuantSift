@@ -45,6 +45,7 @@ import { GlossaryText } from "@/components/glossary/term-tooltip";
 import { PAGE_CONTAINER_CLASS } from "@/lib/spacing";
 import { MarketChartDialog } from "@/components/market-chart/market-chart-dialog";
 import { ProfessionalMarketChart } from "@/components/market-chart/professional-market-chart";
+import { buildKeyPoints } from "@/quant/key-points";
 import { useAppStore } from "@/store/app-store";
 
 const signalMeta: Record<
@@ -95,6 +96,7 @@ export function HomePage() {
   const [chartBars, setChartBars] = useState<DailyBar[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [range, setRange] = useState<7 | 20 | 30 | 60 | 120>(120);
+  const keyPointSetting = useAppStore((state) => state.chartKeyPointAnalysis);
 
   const watchedIds = useMemo(
     () =>
@@ -252,6 +254,10 @@ export function HomePage() {
     () => buildSellTimingMarkers(chartBars),
     [chartBars],
   );
+  const keyPoints = useMemo(
+    () => (keyPointSetting.enabled ? buildKeyPoints(chartBars) : []),
+    [chartBars, keyPointSetting.enabled],
+  );
   const visibleDateSet = useMemo(
     () => new Set(visibleBars.map((bar) => bar.tradeDate)),
     [visibleBars],
@@ -370,6 +376,8 @@ export function HomePage() {
                 bars={visibleBars}
                 markers={visibleMarkers}
                 sellMarkers={visibleSellMarkers}
+                keyPoints={keyPoints}
+                aiDeepEnabled={keyPointSetting.aiDeep}
                 loading={chartLoading}
                 range={range}
                 onRangeChange={setRange}
@@ -567,6 +575,8 @@ function ChartWorkspace({
   bars,
   markers,
   sellMarkers,
+  keyPoints,
+  aiDeepEnabled,
   loading,
   range,
   onRangeChange,
@@ -576,6 +586,8 @@ function ChartWorkspace({
   bars: DailyBar[];
   markers: ReturnType<typeof buildBuyTimingMarkers>;
   sellMarkers: ReturnType<typeof buildSellTimingMarkers>;
+  keyPoints: ReturnType<typeof buildKeyPoints>;
+  aiDeepEnabled: boolean;
   loading: boolean;
   range: 7 | 20 | 30 | 60 | 120;
   onRangeChange: (range: 7 | 20 | 30 | 60 | 120) => void;
@@ -665,6 +677,9 @@ function ChartWorkspace({
           bars={bars}
           markers={markers}
           sellMarkers={sellMarkers}
+          keyPoints={keyPoints}
+          instrument={recommendation.instrument}
+          aiDeepEnabled={aiDeepEnabled}
           height={390}
           className="[&>div:last-child]:max-sm:!h-[320px]"
         />

@@ -63,6 +63,7 @@ import {
   resetTemplateState,
   saveTemplateState,
 } from "@/ai/use-analysis-center";
+import { LocalPointAnalysisCache } from "@/ai/point-analysis-cache";
 import type { TemplateParams } from "@/ai/types";
 
 export function PreferencesPage() {
@@ -131,6 +132,8 @@ export function PreferencesPage() {
       />
 
       <TemplateSettings />
+
+      <KeyPointSettings />
 
       <PaddingPreview value={contentPadding} />
 
@@ -952,6 +955,86 @@ function ProviderOption({
         </span>
       </span>
     </button>
+  );
+}
+
+function KeyPointSettings() {
+  const setting = useAppStore((s) => s.chartKeyPointAnalysis);
+  const setSetting = useAppStore((s) => s.setChartKeyPointAnalysis);
+  const [cacheCount, setCacheCount] = useState(0);
+
+  useEffect(() => {
+    try {
+      const cache = new LocalPointAnalysisCache(window.localStorage);
+      setCacheCount(cache.count());
+    } catch {
+      setCacheCount(0);
+    }
+  }, []);
+
+  const clearCache = () => {
+    const cache = new LocalPointAnalysisCache(window.localStorage);
+    cache.clear();
+    setCacheCount(0);
+  };
+
+  const toggle = (key: "enabled" | "aiDeep") => {
+    setSetting({ ...setting, [key]: !setting[key] });
+  };
+
+  return (
+    <SettingsGroup
+      title="K 线关键点分析"
+      description="加载行情时用本地规则识别关键点（放量突破、金叉/死叉、趋势反转、支撑/压力测试等），在 K 线图上打标记；鼠标悬停标记可查看该点全部指标快照、规则解释与信号提醒。AI 深度分析按点调用模型，结果本地缓存，不重复消耗。"
+      icon={<Sparkle className="h-4 w-4" />}
+    >
+      <label className="flex items-center justify-between gap-4 border-b border-border/60 py-3">
+        <span>
+          <span className="block text-xs font-medium">启用关键点识别与悬停分析</span>
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+            关闭后图表不再绘制关键点标记，悬停只显示常规十字光标读数。
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={setting.enabled}
+          onChange={() => toggle("enabled")}
+          className="h-4 w-4 shrink-0 accent-primary"
+        />
+      </label>
+
+      <label className="flex items-center justify-between gap-4 border-b border-border/60 py-3">
+        <span>
+          <span className="block text-xs font-medium">允许 AI 深度分析（按点调用模型）</span>
+          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+            悬停面板显示「AI 分析此点」按钮；同一标的同一日期只计费一次，结果缓存 30 天。
+          </span>
+        </span>
+        <input
+          type="checkbox"
+          checked={setting.aiDeep}
+          disabled={!setting.enabled}
+          onChange={() => toggle("aiDeep")}
+          className="h-4 w-4 shrink-0 accent-primary"
+        />
+      </label>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <div className="flex min-w-0 items-center gap-2 font-mono text-[9px] text-foreground-subtle">
+          <HardDrives size={13} />
+          已缓存 {cacheCount} 条 AI 点分析结果
+        </div>
+        <button
+          type="button"
+          onClick={clearCache}
+          disabled={cacheCount === 0}
+          className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
+        >
+          <Eraser size={14} />
+          清空缓存
+        </button>
+      </div>
+    </SettingsGroup>
   );
 }
 

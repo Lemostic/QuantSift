@@ -36,6 +36,14 @@ interface AppState {
   aiFactorCatalog: FactorTag[];
   aiIntradaySchedule: IntradaySchedule;
 
+  /** K 线关键点分析：悬停标记点查看指标快照与信号，可再按点调用 AI。 */
+  chartKeyPointAnalysis: {
+    /** 总开关：识别关键点、画标记、显示悬停分析。 */
+    enabled: boolean;
+    /** 面板上的 "AI 分析此点" 按钮（按点调用模型，有本地缓存）。 */
+    aiDeep: boolean;
+  };
+
   // Actions
   toggleSidebar: () => void;
   setActiveCategory: (cat: ModuleCategory | "all") => void;
@@ -49,7 +57,16 @@ interface AppState {
   setAiFactorConfig: (config: FactorConfig) => void;
   setAiFactorCatalog: (catalog: FactorTag[]) => void;
   setAiIntradaySchedule: (schedule: IntradaySchedule) => void;
+  setChartKeyPointAnalysis: (next: {
+    enabled: boolean;
+    aiDeep: boolean;
+  }) => void;
 }
+
+export const DEFAULT_CHART_KEY_POINT_ANALYSIS = {
+  enabled: true,
+  aiDeep: true,
+};
 
 function defaultAiProviders(): LlmProviderConfig[] {
   return [
@@ -143,6 +160,17 @@ export function migrateAppState(
     }
   }
 
+  // ---- v11 ----
+  // K 线关键点分析（默认开启：识别标记 + 悬停分析；AI 深度分析按点付费）。
+  if (fromVersion < 11) {
+    if (
+      !p.chartKeyPointAnalysis ||
+      typeof p.chartKeyPointAnalysis !== "object"
+    ) {
+      p.chartKeyPointAnalysis = { ...DEFAULT_CHART_KEY_POINT_ANALYSIS };
+    }
+  }
+
   if (
     p.marketDataSource !== "auto" &&
     p.marketDataSource !== "eastmoney" &&
@@ -198,6 +226,7 @@ export const useAppStore = create<AppState>()(
       aiFactorConfig: defaultFactorConfig(DEFAULT_FACTOR_TAGS),
       aiFactorCatalog: [],
       aiIntradaySchedule: { ...DEFAULT_INTRADAY_SCHEDULE },
+      chartKeyPointAnalysis: { ...DEFAULT_CHART_KEY_POINT_ANALYSIS },
 
       toggleSidebar: () =>
         set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
@@ -231,11 +260,13 @@ export const useAppStore = create<AppState>()(
       setAiFactorCatalog: (aiFactorCatalog) => set({ aiFactorCatalog }),
       setAiIntradaySchedule: (aiIntradaySchedule) =>
         set({ aiIntradaySchedule }),
+      setChartKeyPointAnalysis: (chartKeyPointAnalysis) =>
+        set({ chartKeyPointAnalysis }),
     }),
     {
       name: "quantsift.app-state.v1",
       storage: createJSONStorage(() => localStorage),
-      version: 10,
+      version: 11,
       partialize: (s) => ({
         theme: s.theme,
         recentModules: s.recentModules,
@@ -247,6 +278,7 @@ export const useAppStore = create<AppState>()(
         aiFactorConfig: s.aiFactorConfig,
         aiFactorCatalog: s.aiFactorCatalog,
         aiIntradaySchedule: s.aiIntradaySchedule,
+        chartKeyPointAnalysis: s.chartKeyPointAnalysis,
       }),
       migrate: migrateAppState,
     },

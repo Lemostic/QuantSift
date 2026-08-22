@@ -7,6 +7,8 @@ import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
 import type { DailyBar, Instrument, RecommendationSignal } from "@/quant/types";
 import { ProfessionalMarketChart } from "./professional-market-chart";
 import { sourceLabel } from "@/data/source-labels";
+import { buildKeyPoints } from "@/quant/key-points";
+import { useAppStore } from "@/store/app-store";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -47,6 +49,7 @@ export function MarketChartDialog({
   const [range, setRange] = useState<7 | 20 | 30 | 60 | 120>(120);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const keyPointSetting = useAppStore((state) => state.chartKeyPointAnalysis);
 
   useEffect(() => {
     if (!open || !instrument) return;
@@ -80,6 +83,10 @@ export function MarketChartDialog({
   );
   const markers = useMemo(() => buildBuyTimingMarkers(bars), [bars]);
   const sellMarkers = useMemo(() => buildSellTimingMarkers(bars), [bars]);
+  const keyPoints = useMemo(
+    () => (keyPointSetting.enabled ? buildKeyPoints(bars) : []),
+    [bars, keyPointSetting.enabled],
+  );
   const intelligence = useMemo(
     () =>
       recommendation && bars.length >= 21
@@ -178,6 +185,9 @@ export function MarketChartDialog({
                 bars={visibleBars}
                 markers={visibleMarkers}
                 sellMarkers={visibleSellMarkers}
+                keyPoints={keyPoints}
+                instrument={instrument}
+                aiDeepEnabled={keyPointSetting.aiDeep}
                 height={460}
               />
 
