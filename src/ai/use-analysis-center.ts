@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { configuredProvider } from "@/data/provider-registry";
+import { createInvokeMarketContextProvider } from "@/data/market-context";
 import { getBrowserBarCache } from "@/cache/browser-store";
 import { createCachedMarketDataProvider } from "@/cache/cached-provider";
 import { useAppStore } from "@/store/app-store";
@@ -8,13 +9,42 @@ import { runIntelligentScan } from "./analysis";
 import { offlineWebResearchProvider } from "./research";
 import { getDueIntradayScan } from "./intraday-scheduler";
 import { LocalAnalysisSessionRepository } from "./session-repository";
+import {
+  LocalTemplateRepository,
+  refineTemplateAfterScan,
+  stateToTemplate,
+  type TemplateState,
+} from "./template-refinery";
 import { DEFAULT_FACTOR_TAGS, type AnalysisSession } from "./types";
 
 const SESSIONS_CHANGED_EVENT = "quantsift:analysis-changed";
 const LAST_RUN_KEY = "quantsift.ai-last-scan.v1";
 
 let browserRepository: LocalAnalysisSessionRepository | null = null;
+let templateRepository: LocalTemplateRepository | null = null;
 let scanInFlight = false;
+
+function getTemplateRepository(): LocalTemplateRepository {
+  if (templateRepository === null) {
+    templateRepository = new LocalTemplateRepository(window.localStorage);
+  }
+  return templateRepository;
+}
+
+/** 读取当前提示词模板状态（外部 UI 也可复用）。 */
+export function readTemplateState(): TemplateState {
+  return getTemplateRepository().read();
+}
+
+/** 保存模板状态（偏好页手动调整后调用）。 */
+export function saveTemplateState(state: TemplateState): void {
+  getTemplateRepository().write(state);
+}
+
+/** 重置提示词模板到默认 v1。 */
+export function resetTemplateState(): TemplateState {
+  return getTemplateRepository().reset();
+}
 
 function getRepository(): LocalAnalysisSessionRepository {
   if (browserRepository === null) {
@@ -65,6 +95,7 @@ export async function executeIntelligentScan(
       (provider) => provider.enabled && provider.apiKey.trim().length > 0,
     );
     const repository = getRepository();
+    const templateState = getTemplateRepository().read();
     const result = await runIntelligentScan({
       provider: createCachedMarketDataProvider(
         configuredProvider(),
@@ -78,11 +109,28 @@ export async function executeIntelligentScan(
       factorTags: [...DEFAULT_FACTOR_TAGS, ...state.aiFactorCatalog],
       listInstruments: () => configuredProvider().listInstruments(),
       listMemory: (instrumentId) => repository.listByInstrument(instrumentId),
+      marketContextProvider: createInvokeMarketContextProvider(),
+      template: stateToTemplate(templateState),
       seed,
       trigger,
     });
     for (const session of result.sessions) {
       await repository.save(session);
+    }
+    // 模板自迭代：依据本次扫描的会话反馈精炼提示词模板并持久化
+    // （版本升级或反馈评分有新增时都写入）。
+    if (result.sessions.length > 0) {
+      const refined = refineTemplateAfterScan(
+        templateState,
+        result.sessions,
+        () => new Date(),
+      );
+      if (
+        refined.appliedRefinements > 0 ||
+        refined.state.scores.length > templateState.scores.length
+      ) {
+        getTemplateRepository().write(refined.state);
+      }
     }
     announceChange();
     return result;

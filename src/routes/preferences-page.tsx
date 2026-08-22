@@ -33,7 +33,7 @@ import {
   paddingToStyle,
   type PagePadding,
 } from "@/lib/spacing";
-import { registry } from "@/data/provider-registry";
+import { checkAllSources, type SourceCheck } from "@/data/source-check";
 import { getBrowserBarCache } from "@/cache/browser-store";
 import { cacheStats } from "@/cache/service";
 import type { CacheStats } from "@/cache/service";
@@ -49,6 +49,12 @@ import {
 } from "@/ai/provider-presets";
 import { refreshFactorCatalogWithAI } from "@/ai/factor-refresh";
 import { createInvokeLlmClient } from "@/ai/llm";
+import {
+  readTemplateState,
+  resetTemplateState,
+  saveTemplateState,
+} from "@/ai/use-analysis-center";
+import type { TemplateParams } from "@/ai/types";
 
 export function PreferencesPage() {
   const contentPadding = useAppStore((s) => s.contentPadding);
@@ -114,6 +120,8 @@ export function PreferencesPage() {
         schedule={aiIntradaySchedule}
         onChange={setAiIntradaySchedule}
       />
+
+      <TemplateSettings />
 
       <PaddingPreview value={contentPadding} />
 
@@ -719,34 +727,22 @@ function MarketDataSettings({
   onFallbackChange: (allow: boolean) => void;
 }) {
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    ok: boolean;
-    message: string;
-  } | null>(null);
+  const [checks, setChecks] = useState<SourceCheck[] | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
 
-  const testConnection = async () => {
+  const runHealthCheck = async () => {
     setTesting(true);
-    setTestResult(null);
+    setCheckError(null);
     try {
-      const provider = registry.provider(source);
-      const instruments = await provider.listInstruments();
-      await provider.getDailyBars("CN:510300", 1);
-      setTestResult({
-        ok: true,
-        message:
-          source === "eastmoney"
-            ? `实时数据服务可用，已读取 ${instruments.length} 个标的`
-            : `离线样本可用，包含 ${instruments.length} 个标的`,
-      });
+      setChecks(await checkAllSources());
     } catch (cause) {
-      setTestResult({
-        ok: false,
-        message: cause instanceof Error ? cause.message : String(cause),
-      });
+      setCheckError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setTesting(false);
     }
   };
+
+  const okCount = checks?.filter((check) => check.ok).length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -754,11 +750,12 @@ function MarketDataSettings({
         <ProviderOption
           active={source === "eastmoney"}
           icon={<WifiHigh size={18} className="text-primary" />}
-          title="东方财富实时数据"
-          detail="应用内置数据服务直接读取 A 股、ETF 与公募基金行情，无需 API 密钥，不依赖 Python。"
+          title="东方财富实时数据（多源自动回退）"
+          detail="主源：东方财富（A 股 / ETF / 基金净值，免费无密钥）。主源失败时自动依次回退到新浪财经、腾讯行情等免费公开接口，逐根行情记录真实来源。"
           onClick={() => {
             onSourceChange("eastmoney");
-            setTestResult(null);
+            setChecks(null);
+            setCheckError(null);
           }}
         />
         <ProviderOption
@@ -769,7 +766,8 @@ function MarketDataSettings({
           detail="固定录制数据，仅用于演示和测试，不代表当前市场行情。"
           onClick={() => {
             onSourceChange("recorded");
-            setTestResult(null);
+            setChecks(null);
+            setCheckError(null);
           }}
         />
       </div>
@@ -779,8 +777,9 @@ function MarketDataSettings({
           "flex items-center justify-between gap-4 border-y border-border/60 py-3",
           source === "recorded" && "opacity-50",
         )}
-      >        <span>
-          <span className="block text-xs font-medium">实时源失败时使用离线样本</span>
+      >
+        <span>
+          <span className="block text-xs font-medium">全部实时源失败时使用离线样本</span>
           <span className="mt-0.5 block text-[10px] text-muted-foreground">
             关闭后会直接显示连接错误，避免把样本数据误认为实时行情。
           </span>
@@ -796,28 +795,58 @@ function MarketDataSettings({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-h-4 text-[11px]">
-          {testResult && (
-            <span
-              className={cn(
-                "flex items-center gap-1.5",
-                testResult.ok ? "text-accent-emerald" : "text-accent-rose",
-              )}
-            >
-              {testResult.ok ? <Check size={13} /> : <Warning size={13} />}
-              {testResult.message}
+          {checkError && (
+            <span className="flex items-center gap-1.5 text-accent-rose">
+              <Warning size={13} />
+              {checkError}
+            </span>
+          )}
+          {checks && !checkError && (
+            <span className="flex items-center gap-1.5 text-foreground-muted">
+              <Check size={13} className="text-accent-emerald" />
+              体检完成：{okCount}/{checks.length} 个免费数据源可用
             </span>
           )}
         </div>
         <button
           type="button"
-          onClick={() => void testConnection()}
-          disabled={testing}
+          onClick={() => void runHealthCheck()}
+          disabled={testing || source === "recorded"}
           className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
         >
           <WifiHigh size={14} />
-          {testing ? "测试中" : "测试连接"}
+          {testing ? "体检中…" : "体检全部数据源"}
         </button>
       </div>
+
+      {checks && (
+        <div className="divide-y divide-border/50 overflow-hidden rounded-md border border-border/60">
+          {checks.map((check) => (
+            <div key={check.id} className="flex items-center justify-between gap-3 px-3 py-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className={cn(
+                    "h-1.5 w-1.5 shrink-0 rounded-full",
+                    check.ok ? "bg-accent-emerald" : "bg-accent-rose",
+                  )}
+                />
+                <span className="truncate text-[11px] font-medium">{check.label}</span>
+                <span className="shrink-0 font-mono text-[8px] uppercase text-foreground-subtle">
+                  {check.kind}
+                </span>
+              </div>
+              <span
+                className={cn(
+                  "shrink-0 truncate pl-2 font-mono text-[9px]",
+                  check.ok ? "text-accent-emerald" : "text-accent-rose",
+                )}
+              >
+                {check.detail}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -859,6 +888,165 @@ function ProviderOption({
         </span>
       </span>
     </button>
+  );
+}
+
+function TemplateSettings() {
+  const [state, setState] = useState(() => readTemplateState());
+  const [saved, setSaved] = useState(false);
+
+  const updateParams = (delta: Partial<TemplateParams>) => {
+    setState((s) => ({ ...s, params: { ...s.params, ...delta } }));
+    setSaved(false);
+  };
+
+  const save = () => {
+    saveTemplateState(state);
+    setSaved(true);
+  };
+
+  const reset = () => {
+    const next = resetTemplateState();
+    setState(next);
+    setSaved(true);
+  };
+
+  const paramRow = (
+    label: string,
+    key: keyof TemplateParams,
+    min: number,
+    max: number,
+    hint: string,
+  ) => (
+    <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-card/30 px-3 py-2">
+      <div className="flex flex-1 flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium tracking-tight text-foreground/80">
+            {label}
+          </span>
+          <span className="font-mono text-[10px] text-muted-foreground/70">
+            {state.params[key]}
+          </span>
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={5}
+          value={state.params[key]}
+          onChange={(e) => updateParams({ [key]: Number(e.target.value) } as Partial<TemplateParams>)}
+          className="h-1.5 w-full cursor-pointer accent-primary"
+        />
+        <span className="text-[9px] text-muted-foreground/60">{hint}</span>
+      </div>
+    </div>
+  );
+
+  return (
+    <SettingsGroup
+      title="AI 提示词模板（自迭代）"
+      description="每次智能分析完成后，系统按反馈（格式合规、置信度校准、风险提示、模型共识）自动评分并小幅优化模板参数，版本递增、变更可查；也可在此手动微调后保存。"
+      icon={<SlidersHorizontal className="h-4 w-4" />}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="rounded-md border border-primary/40 bg-primary/[0.07] px-2 py-1 font-mono text-[10px] text-primary">
+            v{state.version}
+          </span>
+          <span className="font-mono text-[9px] text-foreground-subtle">
+            {state.changelog.length > 0
+              ? `最近优化：${state.changelog[0].appliedAt.slice(0, 10)} · ${state.changelog.length} 次变更`
+              : "尚无自动优化记录"}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {saved && (
+            <span className="flex items-center gap-1 text-[10px] text-accent-emerald">
+              <Check size={12} />
+              已保存
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={reset}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[11px] font-medium text-foreground-muted transition-colors hover:bg-accent"
+          >
+            <ArrowCounterClockwise size={13} />
+            重置为默认
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-primary/40 bg-primary/[0.08] px-3 text-[11px] font-medium text-primary transition-colors hover:bg-primary/[0.14]"
+          >
+            <Check size={13} />
+            保存参数
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {paramRow("输出格式严格度", "strictness", 10, 100, "越高越强制五段式输出，缺失即扣分")}
+        {paramRow("风险关注强度", "riskFocus", 10, 100, "越高要求越多且具体的风险提示")}
+        {paramRow("市场校准权重", "calibrationWeight", 10, 100, "越高越重视全球/A 股环境对结论的约束")}
+        {paramRow("篇幅控制", "verbosity", 10, 90, "越低输出越简洁（200 字级）")}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-medium text-foreground/80">推理深度</span>
+        {(["concise", "standard", "detailed"] as const).map((depth) => (
+          <button
+            key={depth}
+            type="button"
+            onClick={() => updateParams({ reasoningDepth: depth })}
+            className={cn(
+              "h-7 rounded-md border px-3 font-mono text-[10px] transition-colors",
+              state.params.reasoningDepth === depth
+                ? "border-primary/50 bg-primary/[0.08] text-primary"
+                : "border-border/60 text-foreground-muted hover:text-foreground",
+            )}
+          >
+            {depth === "concise" ? "简洁" : depth === "standard" ? "标准" : "详细"}
+          </button>
+        ))}
+      </div>
+
+      {state.changelog.length > 0 && (
+        <div>
+          <div className="mb-1.5 text-[10px] font-semibold text-foreground-muted">
+            最近变更（近 {Math.min(state.changelog.length, 6)} 条）
+          </div>
+          <div className="divide-y divide-border/50 overflow-hidden rounded-md border border-border/60">
+            {state.changelog.slice(0, 6).map((entry) => (
+              <div key={entry.version} className="flex items-start gap-3 px-3 py-2">
+                <span className="mt-0.5 shrink-0 font-mono text-[9px] text-primary">
+                  v{entry.version}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[10px] leading-4 text-foreground-muted">{entry.reason}</p>
+                  <p className="mt-0.5 font-mono text-[8px] text-foreground-subtle">
+                    {entry.appliedAt.replace("T", " ").slice(0, 16)} ·{" "}
+                    {Object.entries(entry.delta)
+                      .map(([key, value]) => `${key}→${value}`)
+                      .join(" · ")}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {state.scores.length > 0 && (
+        <p className="font-mono text-[9px] text-foreground-subtle">
+          最近 {Math.min(state.scores.length, 5)} 次反馈评分：{" "}
+          {state.scores
+            .slice(-5)
+            .map((entry) => `${entry.version}:${entry.score}`)
+            .join(" · ")}
+        </p>
+      )}
+    </SettingsGroup>
   );
 }
 

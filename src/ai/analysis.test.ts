@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { MarketDataProvider } from "@/data/market-data-provider";
+import { createOfflineMarketContextProvider } from "@/data/market-context";
 import { buildRecommendation } from "@/quant/recommendation";
 import type { DailyBar, Instrument } from "@/quant/types";
 import { runAnalysis, runIntelligentScan } from "./analysis";
 import { createRecordingLlmClient } from "./llm";
 import { offlineWebResearchProvider } from "./research";
+import { DEFAULT_ANALYSIS_TEMPLATE } from "./prompt";
 import {
   DEFAULT_FACTOR_TAGS,
   type FactorConfig,
@@ -165,6 +167,64 @@ describe("runAnalysis", () => {
     expect(first.factorVariation).toEqual(second.factorVariation);
     expect(first.advice).toEqual(second.advice);
   });
+
+  it("injects market context and records the template version", async () => {
+    const llm = createRecordingLlmClient({
+      a: "信号: BUY\n置信度: 75\n结论摘要：趋势向上。",
+    });
+    const bars = barsFor(instrument.id);
+    const recommendation = buildRecommendation(instrument, bars);
+    const marketContext = await createOfflineMarketContextProvider().getMarketContext();
+
+    const session = await runAnalysis({
+      instrument,
+      bars,
+      recommendation,
+      providers: [providerConfig("a", "模型A")],
+      llm,
+      researchProvider: offlineWebResearchProvider,
+      factorConfig,
+      factorTags: DEFAULT_FACTOR_TAGS,
+      seed: 42,
+      trigger: "manual",
+      memory: [],
+      marketContext,
+      template: { version: 12, params: DEFAULT_ANALYSIS_TEMPLATE.params },
+      now: NOW,
+      createId: () => "session-mc",
+    });
+
+    expect(session.marketContext?.globalRegime).toBe(marketContext.globalRegime);
+    expect(session.templateVersion).toBe(12);
+    const userMessage = session.messages.find((message) => message.role === "user");
+    expect(userMessage?.content).toContain("【市场环境校准】");
+    expect(userMessage?.content).toContain(marketContext.summary);
+    expect(userMessage?.content).toContain("【提示词模板】v12");
+  });
+
+  it("uses the default template when none is supplied", async () => {
+    const llm = createRecordingLlmClient({
+      a: "信号: HOLD\n置信度: 50\n结论摘要：观望。",
+    });
+    const bars = barsFor(instrument.id);
+    const recommendation = buildRecommendation(instrument, bars);
+    const session = await runAnalysis({
+      instrument,
+      bars,
+      recommendation,
+      providers: [providerConfig("a", "模型A")],
+      llm,
+      researchProvider: offlineWebResearchProvider,
+      factorConfig,
+      factorTags: DEFAULT_FACTOR_TAGS,
+      seed: 42,
+      trigger: "manual",
+      memory: [],
+      now: NOW,
+      createId: () => "session-default-template",
+    });
+    expect(session.templateVersion).toBe(DEFAULT_ANALYSIS_TEMPLATE.version);
+  });
 });
 
 describe("runIntelligentScan", () => {
@@ -235,5 +295,84 @@ describe("runIntelligentScan", () => {
     expect(result.sessions).toHaveLength(0);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toContain("网络不可用");
+  });
+
+  it("fetches market context once per scan and shares it across sessions", async () => {
+    const catalog: Instrument[] = [instrument];
+    let contextFetches = 0;
+    const marketContextProvider = {
+      id: "test",
+      async getMarketContext() {
+        contextFetches += 1;
+        return createOfflineMarketContextProvider().getMarketContext();
+      },
+    };
+    const provider: MarketDataProvider = {
+      id: "eastmoney",
+      async listInstruments() {
+        return catalog;
+      },
+      async getDailyBars(id: string, _limit: number) {
+        return barsFor(id);
+      },
+    };
+    const llm = createRecordingLlmClient({
+      a: "信号: BUY\n置信度: 60\n结论摘要：看好。",
+    });
+
+    const result = await runIntelligentScan({
+      provider,
+      instrumentIds: ["CN:600519", "CN:600519"],
+      llmProviders: [providerConfig("a", "模型A")],
+      llm,
+      researchProvider: offlineWebResearchProvider,
+      factorConfig,
+      factorTags: DEFAULT_FACTOR_TAGS,
+      listInstruments: () => Promise.resolve(catalog),
+      listMemory: () => Promise.resolve([]),
+      marketContextProvider,
+      seed: 5,
+      trigger: "manual",
+      now: NOW,
+    });
+
+    expect(contextFetches).toBe(1);
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0].marketContext).toBeDefined();
+  });
+
+  it("keeps analyzing when the market context provider fails", async () => {
+    const catalog: Instrument[] = [instrument];
+    const provider: MarketDataProvider = {
+      id: "eastmoney",
+      async listInstruments() {
+        return catalog;
+      },
+      async getDailyBars(id: string, _limit: number) {
+        return barsFor(id);
+      },
+    };
+    const result = await runIntelligentScan({
+      provider,
+      instrumentIds: ["CN:600519"],
+      llmProviders: [],
+      llm: createRecordingLlmClient({}),
+      researchProvider: offlineWebResearchProvider,
+      factorConfig,
+      factorTags: DEFAULT_FACTOR_TAGS,
+      listInstruments: () => Promise.resolve(catalog),
+      listMemory: () => Promise.resolve([]),
+      marketContextProvider: {
+        id: "broken",
+        async getMarketContext() {
+          throw new Error("离线环境数据不可用");
+        },
+      },
+      trigger: "manual",
+      now: NOW,
+    });
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0].marketContext).toBeUndefined();
+    expect(result.errors.some((error) => error.includes("市场环境校准不可用"))).toBe(true);
   });
 });

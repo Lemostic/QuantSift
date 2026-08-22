@@ -1,18 +1,21 @@
 import type { MarketDataProvider } from "@/data/market-data-provider";
+import type { MarketContextProvider } from "@/data/market-context";
 import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
 import { buildRecommendation } from "@/quant/recommendation";
 import type { DailyBar, Instrument, Recommendation } from "@/quant/types";
 import { parseAdviceReply, buildConsensus, buildCompositeReport } from "./consensus";
 import { buildFactorVariation } from "./factors";
-import { buildAnalysisMessages } from "./prompt";
+import { buildAnalysisMessages, DEFAULT_ANALYSIS_TEMPLATE } from "./prompt";
 import type {
   AnalysisSession,
+  AnalysisTemplate,
   AnalysisTrigger,
   FactorConfig,
   FactorTag,
   LlmClient,
   LlmMessage,
   LlmProviderConfig,
+  MarketContext,
   ProviderOutcome,
   WebResearchProvider,
 } from "./types";
@@ -30,6 +33,10 @@ export interface RunAnalysisRequest {
   seed?: number;
   trigger: AnalysisTrigger;
   memory: AnalysisSession[];
+  /** 市场环境校准（可选；一轮扫描拉取一次，全部标的共用）。 */
+  marketContext?: MarketContext;
+  /** 本次分析使用的提示词模板（默认 v1）。 */
+  template?: AnalysisTemplate;
   now?: () => Date;
   createId?: () => string;
 }
@@ -49,6 +56,7 @@ async function runProvider(
       model: config.model,
       status: "ok",
       signal: parsed.signal,
+      signalExplicit: parsed.signalExplicit,
       confidence: parsed.confidence,
       summary: parsed.summary,
       durationMs: Date.now() - startedAt,
@@ -83,6 +91,7 @@ export async function runAnalysis(
     apiKey: request.researchApiKey,
   });
 
+  const template = request.template ?? DEFAULT_ANALYSIS_TEMPLATE;
   const messages = buildAnalysisMessages({
     instrumentName: request.instrument.name,
     symbol: request.instrument.symbol,
@@ -98,6 +107,8 @@ export async function runAnalysis(
     variation,
     research,
     memory: request.memory.slice(0, 3),
+    marketContext: request.marketContext,
+    template,
   });
 
   const outcomes = await Promise.all(
@@ -144,6 +155,8 @@ export async function runAnalysis(
     ],
     priceAtAnalysis: request.recommendation.price,
     baseScore: request.recommendation.score,
+    templateVersion: template.version,
+    marketContext: request.marketContext,
   };
 
   return session;
@@ -160,6 +173,10 @@ export interface RunIntelligentScanRequest {
   factorTags: FactorTag[];
   listInstruments: () => Promise<Instrument[]>;
   listMemory: (instrumentId: string) => Promise<AnalysisSession[]>;
+  /** 市场环境校准提供方（可选）：每轮扫描拉取一次并注入全部标的。 */
+  marketContextProvider?: MarketContextProvider;
+  /** 本次扫描使用的提示词模板（默认 v1）。 */
+  template?: AnalysisTemplate;
   seed?: number;
   trigger: AnalysisTrigger;
   now?: () => Date;
@@ -177,6 +194,17 @@ export async function runIntelligentScan(
   const wanted = new Set(request.instrumentIds);
   const sessions: AnalysisSession[] = [];
   const errors: string[] = [];
+
+  // 市场环境校准：每轮扫描只拉取一次，失败不阻塞分析。
+  let marketContext: MarketContext | undefined;
+  if (request.marketContextProvider) {
+    try {
+      marketContext = await request.marketContextProvider.getMarketContext();
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      errors.push("市场环境校准不可用: " + message);
+    }
+  }
 
   for (const instrument of catalog.filter((item) => wanted.has(item.id))) {
     try {
@@ -197,6 +225,8 @@ export async function runIntelligentScan(
         seed: request.seed,
         trigger: request.trigger,
         memory,
+        marketContext,
+        template: request.template,
         now: request.now,
         createId: request.createId,
       });

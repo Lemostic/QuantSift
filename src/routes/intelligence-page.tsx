@@ -4,6 +4,7 @@ import {
   Brain,
   Clock,
   FileMagnifyingGlass,
+  GlobeHemisphereWest,
   Lightning,
   Robot,
   Sparkle,
@@ -21,9 +22,12 @@ import {
 } from "@/ai/session-repository";
 import { useAnalysisCenter } from "@/ai/use-analysis-center";
 import { useAppStore } from "@/store/app-store";
+import { readTemplateState } from "@/ai/use-analysis-center";
+import { sourceLabel } from "@/data/source-labels";
 import type {
   AdviceSignal,
   AnalysisSession,
+  MarketContext,
   ProviderOutcome,
 } from "@/ai/types";
 
@@ -69,6 +73,8 @@ export function IntelligencePage() {
   );
   const [dimension, setDimension] = useState<TimeDimension>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // localStorage 读取廉价，直接每次渲染读取即可让徽章跟随模板自迭代更新。
+  const templateState = readTemplateState();
 
   const autoAnalyzeIds = useMemo(
     () =>
@@ -110,6 +116,24 @@ export function IntelligencePage() {
             <p className="text-[11px] text-foreground-muted sm:text-xs">
               多模型并行研判 · 网络研究 · 随机因子 · 会话留存
             </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <Badge
+                variant="outline"
+                className="gap-1 font-mono text-[9px] text-primary"
+                title="提示词模板自迭代版本：每次分析后按反馈自动优化模板参数"
+              >
+                <Sparkle size={11} className="text-primary" />
+                模板 v{templateState.version}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="hidden font-mono text-[9px] text-foreground-muted sm:inline-flex"
+                title="当前模板可调参数（严格度 / 风险关注 / 校准权重 / 篇幅）"
+              >
+                严格 {templateState.params.strictness} · 风险 {templateState.params.riskFocus} · 校准{" "}
+                {templateState.params.calibrationWeight} · 篇幅 {templateState.params.verbosity}
+              </Badge>
+            </div>
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -332,6 +356,10 @@ function SessionDetail({
                 {session.advice.summary}
               </p>
             </div>
+          )}
+
+          {session.marketContext && (
+            <MarketContextPanel context={session.marketContext} />
           )}
 
           <div>
@@ -586,6 +614,75 @@ function ProviderCard({ outcome }: { outcome: ProviderOutcome }) {  if (outcome.
           {outcome.summary}
         </p>
       )}
+    </div>
+  );
+}
+
+const REGIME_META: Record<MarketContext["globalRegime"], { label: string; className: string }> = {
+  risk_on: { label: "风险偏好偏暖", className: "text-accent-emerald" },
+  risk_off: { label: "风险偏好偏冷", className: "text-accent-rose" },
+  mixed: { label: "风险偏好分化", className: "text-accent-amber" },
+  unknown: { label: "数据不足", className: "text-foreground-subtle" },
+};
+
+const DOMESTIC_META: Record<MarketContext["domesticRegime"], { label: string; className: string }> = {
+  strong: { label: "A 股偏强", className: "text-accent-emerald" },
+  neutral: { label: "A 股震荡", className: "text-accent-amber" },
+  weak: { label: "A 股偏弱", className: "text-accent-rose" },
+  unknown: { label: "数据缺失", className: "text-foreground-subtle" },
+};
+
+function MarketContextPanel({ context }: { context: MarketContext }) {
+  const global = REGIME_META[context.globalRegime];
+  const domestic = DOMESTIC_META[context.domesticRegime];
+  return (
+    <div className="rounded-md border border-border/60 bg-background/30 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-[10px] font-semibold">
+          <GlobeHemisphereWest size={13} className="text-primary" />
+          市场环境校准
+        </div>
+        <div className="flex items-center gap-2 font-mono text-[8px] text-foreground-subtle">
+          <span>{context.asOfDate}</span>
+          <span>·</span>
+          <span>
+            {[...new Set(context.indices.map((index) => sourceLabel(index.provider)))].join(" / ")}
+          </span>
+        </div>
+      </div>
+      <p className="mt-2 text-[10px] leading-4 text-foreground-muted">{context.summary}</p>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className={cn("rounded-full border border-border/60 px-2 py-0.5 text-[9px]", global.className)}>
+          全球 {global.label}
+        </span>
+        <span className={cn("rounded-full border border-border/60 px-2 py-0.5 text-[9px]", domestic.className)}>
+          国内 {domestic.label}
+        </span>
+      </div>
+      <div className="mt-2.5 grid gap-1 sm:grid-cols-2">
+        {context.indices.map((index) => (
+          <div
+            key={index.id}
+            className="flex items-center justify-between gap-2 rounded border border-border/40 bg-background/40 px-2 py-1 font-mono text-[9px]"
+          >
+            <span className="truncate text-foreground-muted">
+              {index.name}
+              <span className="ml-1 text-foreground-subtle">
+                {index.region === "domestic" ? "A" : "G"} · {sourceLabel(index.provider)}
+              </span>
+            </span>
+            <span
+              className={cn(
+                "shrink-0",
+                index.change20dPct >= 0 ? "text-accent-emerald" : "text-accent-rose",
+              )}
+            >
+              {index.change20dPct >= 0 ? "+" : ""}
+              {index.change20dPct}%
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

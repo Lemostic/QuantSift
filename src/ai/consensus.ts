@@ -10,6 +10,8 @@ import type {
 export interface ParsedProviderSignal {
   signal: AdviceSignal;
   confidence: number;
+  /** 模型回复中是否显式给出了信号行（供模板反馈评估）。 */
+  signalExplicit: boolean;
   /** 干净摘要：剔除信号/置信度行后的正文前几行。 */
   summary: string;
   /** 依据行（以 - / • / 数字 开头的行，或含“依据/理由/因为”）。 */
@@ -68,6 +70,7 @@ export function parseAdviceReply(content: string): ParsedProviderSignal {
 
   return {
     signal: signalMatch ? normalizeSignal(signalMatch[1]) : "watch",
+    signalExplicit: signalMatch !== null,
     confidence,
     summary: bodyLines.slice(0, 6).join("\n") || content.slice(0, 200),
     reasons: reasons.slice(0, 5),
