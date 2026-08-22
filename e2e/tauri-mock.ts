@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { recordedMarketDataProvider } from "../src/data/recorded-provider";
+import { createOfflineMarketContextProvider } from "../src/data/market-context";
 
 /**
  * Installs a Tauri-bridge mock before the page loads, so the SPA runs in a
@@ -17,9 +18,10 @@ export async function installTauriMock(page: Page): Promise<void> {
       60,
     );
   }
+  const contextProvider = createOfflineMarketContextProvider();
 
   await page.addInitScript(
-    ({ instruments, bars }) => {
+    ({ instruments, bars, contextProvider }) => {
       (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {
         invoke: async (cmd: string, args?: Record<string, unknown>) => {
           if (cmd === "eastmoney_list_instruments") return instruments;
@@ -41,10 +43,23 @@ export async function installTauriMock(page: Page): Promise<void> {
                 instrument.symbol.includes(keyword),
             );
           }
+          if (cmd === "market_get_context") {
+            return contextProvider.getMarketContext();
+          }
+          if (cmd === "market_check_sources") {
+            return [
+              { id: "eastmoney", label: "东方财富 K 线", kind: "kline", ok: true, detail: "OK（mock）" },
+              { id: "sina", label: "新浪财经 K 线", kind: "kline", ok: true, detail: "OK（mock）" },
+              { id: "tencent", label: "腾讯行情 K 线", kind: "kline", ok: true, detail: "OK（mock）" },
+              { id: "nav", label: "东财基金净值（网页版）", kind: "nav", ok: true, detail: "OK（mock）" },
+              { id: "nav_mob", label: "东财基金净值（移动版）", kind: "nav", ok: true, detail: "OK（mock）" },
+              { id: "search", label: "标的搜索", kind: "search", ok: true, detail: "OK（mock）" },
+            ];
+          }
           throw new Error(`mock: unknown command ${cmd}`);
         },
       };
     },
-    { instruments, bars: barsByInstrument },
+    { instruments, bars: barsByInstrument, contextProvider },
   );
 }

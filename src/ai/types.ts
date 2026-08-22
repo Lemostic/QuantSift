@@ -37,6 +37,54 @@ export interface ResearchContext {
   apiKey?: string;
 }
 
+/** 单个国内外指数的行情快照（确定性计算，非 LLM 输出）。 */
+export interface IndexSnapshot {
+  id: string;
+  name: string;
+  region: "domestic" | "global";
+  /** 实际提供数据的免费源：eastmoney / sina / tencent。 */
+  provider: string;
+  asOfDate: string;
+  close: number;
+  changePct: number;
+  change20dPct: number;
+  change60dPct: number;
+  aboveMa20: boolean;
+  aboveMa60: boolean;
+  volatility20d: number;
+  regimeLabel: "上行" | "震荡" | "下行";
+}
+
+/** 市场环境校准数据：全球风险偏好 + A 股中期位置 + 指数快照。 */
+export interface MarketContext {
+  asOfDate: string;
+  fetchedAt: string;
+  globalRegime: "risk_on" | "risk_off" | "mixed" | "unknown";
+  domesticRegime: "strong" | "neutral" | "weak" | "unknown";
+  summary: string;
+  indices: IndexSnapshot[];
+}
+
+/** AI 分析提示词模板的可调参数。 */
+export interface TemplateParams {
+  /** 推理深度：concise / standard / detailed。 */
+  reasoningDepth: "concise" | "standard" | "detailed";
+  /** 输出格式严格度 0-100。 */
+  strictness: number;
+  /** 风险关注强度 0-100。 */
+  riskFocus: number;
+  /** 市场环境校准权重 0-100。 */
+  calibrationWeight: number;
+  /** 篇幅控制 0-100（越低越简洁）。 */
+  verbosity: number;
+}
+
+/** 一个版本的提示词模板。 */
+export interface AnalysisTemplate {
+  version: number;
+  params: TemplateParams;
+}
+
 export interface WebResearchProvider {
   readonly id: string;
   research(
@@ -84,6 +132,8 @@ export interface ProviderOutcome {
   model: string;
   status: "ok" | "error";
   signal?: AdviceSignal;
+  /** 模型回复中是否显式给出了信号行（用于模板反馈评估）。 */
+  signalExplicit?: boolean;
   confidence?: number;
   summary?: string;
   error?: string;
@@ -143,6 +193,10 @@ export interface AnalysisSession {
   messages: AnalysisMessage[];
   priceAtAnalysis: number;
   baseScore: number;
+  /** 本次分析使用的提示词模板版本（模板自迭代记录）。 */
+  templateVersion?: number;
+  /** 本次分析时的市场环境校准数据（可选）。 */
+  marketContext?: MarketContext;
 }
 
 export interface IntradaySchedule {

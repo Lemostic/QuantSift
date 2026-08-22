@@ -6,6 +6,7 @@ import { buildBuyTimingMarkers, buildSellTimingMarkers } from "@/quant/buy-timin
 import { buildSignalIntelligence } from "@/intelligence/signal-intelligence";
 import type { DailyBar, Instrument, RecommendationSignal } from "@/quant/types";
 import { ProfessionalMarketChart } from "./professional-market-chart";
+import { sourceLabel } from "@/data/source-labels";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -43,7 +44,7 @@ export function MarketChartDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const [bars, setBars] = useState<DailyBar[]>([]);
-  const [range, setRange] = useState<7 | 20 | 30>(30);
+  const [range, setRange] = useState<7 | 20 | 30 | 60 | 120>(120);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,7 +54,7 @@ export function MarketChartDialog({
     setLoading(true);
     setError(null);
     void configuredProvider()
-      .getDailyBars(instrument.id, 30)
+      .getDailyBars(instrument.id, 120)
       .then((next) => {
         if (!cancelled) setBars(next);
       })
@@ -108,7 +109,21 @@ export function MarketChartDialog({
                 {instrument?.name ?? "K 线研究"}
               </DialogTitle>
               <DialogDescription className="mt-1 font-mono text-[10px]">
-                {instrument?.symbol} · {instrument?.exchange} · {bars.at(-1)?.provider ?? ""}
+                {instrument?.symbol} · {instrument?.exchange} ·{" "}
+                {bars.length > 0 ? (
+                  <span className="text-primary">{sourceLabel(bars.at(-1)?.provider)}</span>
+                ) : (
+                  "加载中"
+                )}
+                {bars.at(-1)?.fetchedAt && (
+                  <span className="text-foreground-subtle">
+                    {" "}
+                    · 更新 {new Date(bars.at(-1)!.fetchedAt).toLocaleTimeString("zh-CN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                )}
               </DialogDescription>
             </div>
           </div>
@@ -126,7 +141,7 @@ export function MarketChartDialog({
               </Badge>
             )}
             <div className="flex rounded-md border border-border bg-background p-0.5">
-              {([7, 20, 30] as const).map((value) => (
+              {([7, 20, 30, 60, 120] as const).map((value) => (
                 <button
                   key={value}
                   type="button"

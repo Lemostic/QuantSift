@@ -92,7 +92,7 @@ export function HomePage() {
   const [chartOpen, setChartOpen] = useState(false);
   const [chartBars, setChartBars] = useState<DailyBar[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
-  const [range, setRange] = useState<7 | 20 | 30>(30);
+  const [range, setRange] = useState<7 | 20 | 30 | 60 | 120>(120);
 
   const watchedIds = useMemo(
     () =>
@@ -220,7 +220,7 @@ export function HomePage() {
     let cancelled = false;
     setChartLoading(true);
     void cachedProvider
-      .getDailyBarsCached(selected.instrument.id, 30)
+      .getDailyBarsCached(selected.instrument.id, 120)
       .then((result: CachedBarsResult) => {
         if (!cancelled) setChartBars(result.bars);
       })
@@ -560,8 +560,8 @@ function ChartWorkspace({
   markers: ReturnType<typeof buildBuyTimingMarkers>;
   sellMarkers: ReturnType<typeof buildSellTimingMarkers>;
   loading: boolean;
-  range: 7 | 20 | 30;
-  onRangeChange: (range: 7 | 20 | 30) => void;
+  range: 7 | 20 | 30 | 60 | 120;
+  onRangeChange: (range: 7 | 20 | 30 | 60 | 120) => void;
   onExpand: () => void;
 }) {
   const meta = signalMeta[recommendation.signal];
@@ -612,7 +612,7 @@ function ChartWorkspace({
             </div>
           </div>
           <div className="flex items-center rounded-md border border-border bg-background p-0.5">
-            {([7, 20, 30] as const).map((value) => (
+            {([7, 20, 30, 60, 120] as const).map((value) => (
               <button
                 key={value}
                 type="button"

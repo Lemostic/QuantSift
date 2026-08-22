@@ -342,6 +342,9 @@ function LegendBar({ bars }: { bars: DailyBar[] }) {
   if (!stats) return null;
   const up = stats.changePct >= 0;
   const changeColor = up ? CHART_COLORS.up : CHART_COLORS.down;
+  const previousClose = stats.close - stats.changeAmount;
+  const amplitudePct =
+    previousClose > 0 ? ((stats.high - stats.low) / previousClose) * 100 : 0;
 
   return (
     <div className="flex h-9 items-center gap-x-3 gap-y-0 overflow-x-auto whitespace-nowrap border-b border-border/70 bg-background-elevated/75 px-3 font-mono text-[10px] text-foreground-subtle [&_strong]:font-medium [&_strong]:text-foreground">
@@ -355,6 +358,9 @@ function LegendBar({ bars }: { bars: DailyBar[] }) {
       <span className="shrink-0" style={{ color: changeColor }}>
         {up ? "+" : ""}
         {stats.changePct.toFixed(2)}%
+      </span>
+      <span className="shrink-0 text-foreground-subtle">
+        振幅 <strong>{amplitudePct.toFixed(2)}%</strong>
       </span>
       <LegendItem color={CHART_COLORS.ma5} label="MA5" value={stats.ma5} />
       <LegendItem color={CHART_COLORS.ma20} label="MA20" value={stats.ma20} />
