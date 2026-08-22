@@ -54,7 +54,9 @@ impl KlineTarget {
 
 pub fn build_client() -> Result<Client, String> {
     Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
+        // 8s 总超时：死源/黑洞网络不应长时间拖住看板刷新（回退链会接力）。
+        .timeout(std::time::Duration::from_secs(8))
+        .connect_timeout(std::time::Duration::from_secs(5))
         .user_agent(USER_AGENT)
         .pool_max_idle_per_host(4)
         .build()
@@ -230,6 +232,52 @@ pub async fn fetch_kline_with_fallback(
     }
 
     Err(format!("所有免费行情源均失败（{last_error}）"))
+}
+
+/// The kline sources a caller can pin explicitly.
+pub const KLINE_SOURCES: &[&str] = &["auto", "eastmoney", "sina", "tencent"];
+
+/// Fetches klines using the requested source.
+/// - "auto" (default): EastMoney with one retry, then Sina, then Tencent.
+/// - "eastmoney" / "sina" / "tencent": pinned source only; a failure is an
+///   error, never a silent fallback.
+pub async fn fetch_kline_with_source(
+    client: &Client,
+    target: &KlineTarget,
+    limit: u32,
+    today: &str,
+    source: &str,
+) -> Result<(Vec<KlineRow>, &'static str), String> {
+    match source {
+        "eastmoney" => {
+            let body = fetch_eastmoney_kline_body(client, target, limit, today).await?;
+            let rows = super::parse::parse_kline_response(&body)?;
+            Ok((rows, "eastmoney"))
+        }
+        "sina" => {
+            let symbol = target
+                .sina_symbol
+                .as_deref()
+                .ok_or_else(|| "该市场不支持新浪行情".to_string())?;
+            let body = fetch_sina_kline_body(client, &KlineTarget::for_index(
+                &target.em_secid, Some(symbol), target.tencent_symbol.as_deref(),
+            ), limit).await?;
+            let rows = super::parse::parse_sina_kline_response(&body)?;
+            Ok((rows, "sina"))
+        }
+        "tencent" => {
+            let symbol = target
+                .tencent_symbol
+                .as_deref()
+                .ok_or_else(|| "该市场不支持腾讯行情".to_string())?;
+            let body = fetch_tencent_kline_body(client, &KlineTarget::for_index(
+                &target.em_secid, target.sina_symbol.as_deref(), Some(symbol),
+            ), limit).await?;
+            let rows = super::parse::parse_tencent_kline_response(&body)?;
+            Ok((rows, "tencent"))
+        }
+        _ => fetch_kline_with_fallback(client, target, limit, today).await,
+    }
 }
 
 /// Fetches one NAV page through the fallback chain:

@@ -80,7 +80,7 @@ export function HomePage() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<DataSourceId>("eastmoney");
+  const [dataSource, setDataSource] = useState<DataSourceId>("auto");
   const [fellBack, setFellBack] = useState(false);
   /** True while the visible result was rendered from the local bar cache. */
   const [servedFromCache, setServedFromCache] = useState(false);
@@ -88,6 +88,8 @@ export function HomePage() {
   const [cacheAsOf, setCacheAsOf] = useState<string | null>(null);
   /** Non-fatal live-source failure while the cache kept the page usable. */
   const [cacheError, setCacheError] = useState<string | null>(null);
+  /** 数据源失败的详细原因（展示在横幅上，便于诊断）。 */
+  const [sourceDetail, setSourceDetail] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [chartOpen, setChartOpen] = useState(false);
   const [chartBars, setChartBars] = useState<DailyBar[]>([]);
@@ -108,6 +110,7 @@ export function HomePage() {
     setError(null);
     setCacheError(null);
     setCacheAsOf(null);
+    setSourceDetail(null);
     try {
       const provider = configuredProvider();
       const result = await loadCachedMarketData({
@@ -123,7 +126,9 @@ export function HomePage() {
         },
       });
       setRecommendations(result.recommendations);
-      setDataSource(provider.id === "eastmoney" ? "eastmoney" : "recorded");
+      setDataSource(
+        provider.id === "recorded-fixture" ? "recorded" : preferredDataSource,
+      );
       setFellBack(false);
       setServedFromCache(result.meta.servedFrom === "cache");
       const latestTradeDate = result.meta.states.reduce<string | null>(
@@ -140,6 +145,9 @@ export function HomePage() {
           ? result.meta.refreshErrors.join("；")
           : null,
       );
+      if (result.meta.refreshErrors.length > 0) {
+        setSourceDetail(result.meta.refreshErrors.join("；"));
+      }
 
       // Last resort: the live source failed and the cache has nothing
       // usable — keep the recorded-fixture offline fallback behavior.
@@ -157,6 +165,7 @@ export function HomePage() {
           setError(null);
           setServedFromCache(false);
           setCacheError(null);
+          setSourceDetail(fallback.error);
         } else {
           setError(
             fallback.error ??
@@ -300,7 +309,12 @@ export function HomePage() {
                   className="mt-0.5 shrink-0 text-accent-amber sm:mt-0"
                 />
                 <p className="text-[11px] leading-4 text-foreground-muted sm:text-xs">
-                  东方财富数据源暂不可用，已回退到离线样例行情。显示的数据用于验证研究流程，不构成交易依据。
+                  实时数据源暂不可用，已回退到离线样例行情。显示的数据用于验证研究流程，不构成交易依据。
+                  {sourceDetail && (
+                    <span className="mt-0.5 block truncate font-mono text-[9px] text-foreground-subtle">
+                      {sourceDetail}
+                    </span>
+                  )}
                 </p>
               </div>
               <Badge variant="outline" className="hidden shrink-0 font-mono text-[9px] sm:inline-flex">
@@ -318,8 +332,11 @@ export function HomePage() {
                   className="mt-0.5 shrink-0 text-accent-amber sm:mt-0"
                 />
                 <p className="text-[11px] leading-4 text-foreground-muted sm:text-xs">
-                  实时数据源暂不可用，当前展示本地缓存行情
-                  {cacheAsOf ? `（截至 ${cacheAsOf}）` : ""}。数据可能延迟，不构成交易依据。
+                  部分实时数据源暂不可用，已回退到其他免费源或本地缓存
+                  {cacheAsOf ? `（截至 ${cacheAsOf}）` : ""}。
+                  <span className="mt-0.5 block truncate font-mono text-[9px] text-foreground-subtle">
+                    {sourceDetail ?? cacheError}
+                  </span>
                 </p>
               </div>
               <Badge variant="outline" className="hidden shrink-0 font-mono text-[9px] sm:inline-flex">
@@ -409,7 +426,7 @@ function DashboardHeader({
   degraded: boolean;
   onRefresh: () => void;
 }) {
-  const sourceLabel = `${dataSource === "eastmoney" ? "EASTMONEY" : "RECORDED"} · ${
+  const sourceLabel = `${dataSource === "recorded" ? "RECORDED" : dataSource.toUpperCase()} · ${
     servedFromCache ? "CACHE" : fellBack ? "FIXTURE" : "LIVE"
   }`;
   return (

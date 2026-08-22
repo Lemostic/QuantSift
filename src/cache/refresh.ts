@@ -81,23 +81,23 @@ export interface RefreshWatchlistRequest {
 }
 
 /**
- * Refreshes every requested instrument sequentially. A failed instrument is
- * reported in its own result and does not abort the remaining instruments.
+ * Refreshes every requested instrument concurrently. A failed instrument is
+ * reported in its own result and does not abort the remaining instruments;
+ * concurrency keeps one slow/dead source from stalling the whole dashboard.
  */
 export async function refreshWatchlistCache(
   request: RefreshWatchlistRequest,
 ): Promise<InstrumentRefreshResult[]> {
-  const results: InstrumentRefreshResult[] = [];
-  for (const instrumentId of request.instrumentIds) {
-    results.push(
-      await refreshInstrumentCache({
+  const results = await Promise.all(
+    request.instrumentIds.map((instrumentId) =>
+      refreshInstrumentCache({
         cache: request.cache,
         provider: request.provider,
         instrumentId,
         config: request.config,
         now: request.now,
       }),
-    );
-  }
+    ),
+  );
   return results;
 }

@@ -123,11 +123,20 @@ pub async fn eastmoney_search_instruments(
 pub async fn eastmoney_get_daily_bars(
     instrument_id: String,
     limit: u32,
+    source: Option<String>,
 ) -> Result<Vec<MarketBar>, String> {
     let entry = lookup_instrument(&instrument_id)?;
     let limit = limit.clamp(1, 500);
     let client = http_client()?;
     let today = shanghai_today();
+    // 数据源选择：auto（智能回退，默认）/ eastmoney / sina / tencent。
+    // 场外基金净值只有东财链路，指定源对净值无效。
+    let source = source.as_deref().unwrap_or("auto");
+    let source = if client::KLINE_SOURCES.contains(&source) {
+        source
+    } else {
+        "auto"
+    };
 
     if entry.otc_fund {
         // The NAV endpoints cap each page at 20 rows (newest first), so the
@@ -161,7 +170,7 @@ pub async fn eastmoney_get_daily_bars(
             .ok_or_else(|| format!("{} 缺少市场前缀", entry.id))?;
         let target = client::KlineTarget::for_market(market, entry.symbol);
         let (rows, provider) =
-            client::fetch_kline_with_fallback(client, &target, limit, &today).await?;
+            client::fetch_kline_with_source(client, &target, limit, &today, source).await?;
         Ok(tail(rows, limit)
             .into_iter()
             .map(|row| MarketBar::from_kline(entry, row, provider))
@@ -235,9 +244,8 @@ async fn check_nav_source(
     }
 }
 
-/// 体检所有免费数据源（K 线三源 + 净值两源 + 搜索），供偏好页展示。
-#[tauri::command]
-pub async fn market_check_sources() -> Vec<SourceCheck> {
+/// 执行一次完整的数据源体检（K 线三源 + 净值两源 + 搜索）。
+async fn run_source_checks() -> Vec<SourceCheck> {
     let client = match http_client() {
         Ok(client) => client,
         Err(err) => {
@@ -318,4 +326,58 @@ pub async fn market_check_sources() -> Vec<SourceCheck> {
     checks.extend(nav_checks);
     checks.push(search_check);
     checks
+}
+
+/// 立即体检（手动"重新检测"按钮使用，不做缓存）。
+#[tauri::command]
+pub async fn market_check_sources() -> Vec<SourceCheck> {
+    run_source_checks().await
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceStatus {
+    pub cached_at: String,
+    pub checks: Vec<SourceCheck>,
+    pub summary: String,
+}
+
+static SOURCE_STATUS_CACHE: OnceLock<
+    tokio::sync::Mutex<Option<(std::time::Instant, SourceStatus)>>
+> = OnceLock::new();
+
+fn source_status_cache() -> &'static tokio::sync::Mutex<Option<(std::time::Instant, SourceStatus)>> {
+    SOURCE_STATUS_CACHE.get_or_init(|| tokio::sync::Mutex::new(None))
+}
+
+fn source_status_summary(checks: &[SourceCheck]) -> String {
+    let ok = checks.iter().filter(|check| check.ok).count();
+    let kline_ok = checks
+        .iter()
+        .filter(|check| check.kind == "kline" && check.ok)
+        .count();
+    format!("{ok}/{} 数据源可用（K 线源 {kline_ok}/3）", checks.len())
+}
+
+/// 数据源连通性状态（5 分钟进程内缓存）：供偏好页进入时自动检测，
+/// 无需每次打开页面都请求一遍所有端点。
+#[tauri::command]
+pub async fn market_source_status() -> SourceStatus {
+    let now = std::time::Instant::now();
+    let cache = source_status_cache();
+    if let Some((cached_at, status)) = cache.lock().await.as_ref() {
+        if cached_at.elapsed() < std::time::Duration::from_secs(300) {
+            return status.clone();
+        }
+    }
+    let checks = run_source_checks().await;
+    let summary = source_status_summary(&checks);
+    let status = SourceStatus {
+        cached_at: shanghai_iso_now(),
+        summary,
+        checks,
+    };
+    let mut guard = cache.lock().await;
+    *guard = Some((now, status.clone()));
+    status
 }

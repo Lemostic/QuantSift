@@ -90,15 +90,19 @@ function normalizeError(cause: unknown): EastMoneyError {
 
 /**
  * MarketDataProvider backed by the native Rust market commands, which fetch
- * A-share/ETF daily bars and fund NAVs from the EastMoney public endpoints.
+ * A-share/ETF daily bars and fund NAVs through the free-source chain.
  * UI and strategy code keep depending on the provider contract; they never
  * talk to vendor endpoints directly.
+ *
+ * @param source 数据源选择："auto"（智能回退，默认）/ "eastmoney" / "sina" / "tencent"。
+ *               指定单一源时不静默回退，失败即报错。
  */
 export function createEastMoneyMarketDataProvider(
   invokeFn: InvokeFn = defaultInvoke,
+  source: string = "auto",
 ): MarketDataProvider {
   return {
-    id: "eastmoney",
+    id: source === "auto" ? "eastmoney" : source,
 
     async listInstruments(): Promise<Instrument[]> {
       try {
@@ -117,6 +121,7 @@ export function createEastMoneyMarketDataProvider(
         const values = await invokeFn("eastmoney_get_daily_bars", {
           instrumentId,
           limit,
+          source,
         });
         return (values as MarketBar[]).map(toDailyBar);
       } catch (cause) {

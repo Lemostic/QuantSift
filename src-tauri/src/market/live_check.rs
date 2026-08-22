@@ -4,7 +4,7 @@
 
 use crate::market::client::{fetch_fund_nav_body, fetch_kline_body};
 use crate::market::parse::{parse_fund_nav_response, parse_kline_response};
-use crate::market::search::{parse_search_response, search_instruments};
+use crate::market::search::search_instruments;
 
 #[tokio::test]
 #[ignore]

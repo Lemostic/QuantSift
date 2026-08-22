@@ -90,6 +90,7 @@ pub fn run() {
             market::eastmoney_get_daily_bars,
             market::eastmoney_search_instruments,
             market::market_check_sources,
+            market::market_source_status,
             market::context::market_get_context,
             ai::llm_chat_completion
         ])

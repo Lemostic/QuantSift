@@ -4,6 +4,7 @@
  * 净值：eastmoney → eastmoney_mob）。
  */
 export const SOURCE_LABELS: Record<string, string> = {
+  auto: "智能回退",
   eastmoney: "东方财富",
   eastmoney_mob: "东财移动",
   sina: "新浪财经",

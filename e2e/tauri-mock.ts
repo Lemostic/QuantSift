@@ -46,8 +46,8 @@ export async function installTauriMock(page: Page): Promise<void> {
           if (cmd === "market_get_context") {
             return contextProvider.getMarketContext();
           }
-          if (cmd === "market_check_sources") {
-            return [
+          if (cmd === "market_check_sources" || cmd === "market_source_status") {
+            const checks = [
               { id: "eastmoney", label: "东方财富 K 线", kind: "kline", ok: true, detail: "OK（mock）" },
               { id: "sina", label: "新浪财经 K 线", kind: "kline", ok: true, detail: "OK（mock）" },
               { id: "tencent", label: "腾讯行情 K 线", kind: "kline", ok: true, detail: "OK（mock）" },
@@ -55,6 +55,10 @@ export async function installTauriMock(page: Page): Promise<void> {
               { id: "nav_mob", label: "东财基金净值（移动版）", kind: "nav", ok: true, detail: "OK（mock）" },
               { id: "search", label: "标的搜索", kind: "search", ok: true, detail: "OK（mock）" },
             ];
+            if (cmd === "market_source_status") {
+              return { cachedAt: "2026-08-22T10:00:00+08:00", summary: "6/6 数据源可用（K 线源 3/3）", checks };
+            }
+            return checks;
           }
           throw new Error(`mock: unknown command ${cmd}`);
         },

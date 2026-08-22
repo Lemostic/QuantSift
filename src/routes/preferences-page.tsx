@@ -14,6 +14,7 @@ import {
   Palette,
   Plus,
   Robot,
+  Shuffle,
   SlidersHorizontal,
   Sparkle,
   Trash,
@@ -33,7 +34,15 @@ import {
   paddingToStyle,
   type PagePadding,
 } from "@/lib/spacing";
-import { checkAllSources, type SourceCheck } from "@/data/source-check";
+import {
+  checkAllSources,
+  getSourceStatus,
+  type SourceStatus,
+} from "@/data/source-check";
+import {
+  LIVE_SOURCE_META,
+  type DataSourceId,
+} from "@/data/provider-registry";
 import { getBrowserBarCache } from "@/cache/browser-store";
 import { cacheStats } from "@/cache/service";
 import type { CacheStats } from "@/cache/service";
@@ -721,20 +730,44 @@ function MarketDataSettings({
   onSourceChange,
   onFallbackChange,
 }: {
-  source: "eastmoney" | "recorded";
+  source: DataSourceId;
   allowFallback: boolean;
-  onSourceChange: (source: "eastmoney" | "recorded") => void;
+  onSourceChange: (source: DataSourceId) => void;
   onFallbackChange: (allow: boolean) => void;
 }) {
   const [testing, setTesting] = useState(false);
-  const [checks, setChecks] = useState<SourceCheck[] | null>(null);
+  const [status, setStatus] = useState<SourceStatus | null>(null);
   const [checkError, setCheckError] = useState<string | null>(null);
+
+  /** 进入偏好页自动检测（Rust 侧 5 分钟缓存，不会频繁请求端点）。 */
+  useEffect(() => {
+    let cancelled = false;
+    void getSourceStatus()
+      .then((next) => {
+        if (!cancelled) setStatus(next);
+      })
+      .catch((cause) => {
+        if (!cancelled) {
+          setCheckError(cause instanceof Error ? cause.message : String(cause));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const runHealthCheck = async () => {
     setTesting(true);
     setCheckError(null);
     try {
-      setChecks(await checkAllSources());
+      setStatus({ cachedAt: new Date().toISOString(), summary: "重新检测中…", checks: [] });
+      const checks = await checkAllSources();
+      const klineOk = checks.filter((check) => check.kind === "kline" && check.ok).length;
+      setStatus({
+        cachedAt: new Date().toISOString(),
+        summary: `${checks.filter((check) => check.ok).length}/${checks.length} 数据源可用（K 线源 ${klineOk}/3）`,
+        checks,
+      });
     } catch (cause) {
       setCheckError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -742,22 +775,42 @@ function MarketDataSettings({
     }
   };
 
-  const okCount = checks?.filter((check) => check.ok).length ?? 0;
+  const checks = status?.checks ?? null;
+  const klineOk = checks?.filter((check) => check.kind === "kline" && check.ok).length ?? 0;
+  // 选中源是否被体检判定为可用（auto 只要有任一 K 线源可用即可）
+  const selectedUnavailable =
+    source !== "recorded" &&
+    checks !== null &&
+    checks.length > 0 &&
+    source === "auto"
+      ? klineOk === 0
+      : checks?.find((check) => check.id === source)?.ok === false;
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-2">
-        <ProviderOption
-          active={source === "eastmoney"}
-          icon={<WifiHigh size={18} className="text-primary" />}
-          title="东方财富实时数据（多源自动回退）"
-          detail="主源：东方财富（A 股 / ETF / 基金净值，免费无密钥）。主源失败时自动依次回退到新浪财经、腾讯行情等免费公开接口，逐根行情记录真实来源。"
-          onClick={() => {
-            onSourceChange("eastmoney");
-            setChecks(null);
-            setCheckError(null);
-          }}
-        />
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {(Object.values(LIVE_SOURCE_META) as Array<(typeof LIVE_SOURCE_META)["auto"]>).map(
+          (meta) => (
+            <ProviderOption
+              key={meta.id}
+              active={source === meta.id}
+              warning={false}
+              icon={
+                meta.id === "auto" ? (
+                  <Shuffle size={18} className="text-primary" />
+                ) : (
+                  <WifiHigh size={18} className="text-primary" />
+                )
+              }
+              title={meta.label}
+              detail={meta.detail}
+              onClick={() => {
+                onSourceChange(meta.id);
+                setCheckError(null);
+              }}
+            />
+          ),
+        )}
         <ProviderOption
           active={source === "recorded"}
           warning
@@ -766,7 +819,6 @@ function MarketDataSettings({
           detail="固定录制数据，仅用于演示和测试，不代表当前市场行情。"
           onClick={() => {
             onSourceChange("recorded");
-            setChecks(null);
             setCheckError(null);
           }}
         />
@@ -793,6 +845,15 @@ function MarketDataSettings({
         />
       </label>
 
+      {selectedUnavailable && (
+        <div className="flex items-start gap-2.5 border-l-2 border-accent-amber bg-accent-amber/[0.05] px-3 py-2.5">
+          <Warning size={15} className="mt-0.5 shrink-0 text-accent-amber" />
+          <p className="text-[11px] leading-4 text-foreground-muted">
+            当前选中的数据源在最近的连通性检测中不可用；可切换到「智能回退」让应用自动选择可用源。
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-h-4 text-[11px]">
           {checkError && (
@@ -801,10 +862,13 @@ function MarketDataSettings({
               {checkError}
             </span>
           )}
-          {checks && !checkError && (
+          {status && !checkError && checks && checks.length > 0 && (
             <span className="flex items-center gap-1.5 text-foreground-muted">
               <Check size={13} className="text-accent-emerald" />
-              体检完成：{okCount}/{checks.length} 个免费数据源可用
+              {status.summary}
+              <span className="font-mono text-[9px] text-foreground-subtle">
+                · {status.cachedAt.slice(0, 16).replace("T", " ")}
+              </span>
             </span>
           )}
         </div>
@@ -815,11 +879,11 @@ function MarketDataSettings({
           className="inline-flex h-8 items-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
         >
           <WifiHigh size={14} />
-          {testing ? "体检中…" : "体检全部数据源"}
+          {testing ? "检测中…" : "重新检测连通性"}
         </button>
       </div>
 
-      {checks && (
+      {checks && checks.length > 0 && (
         <div className="divide-y divide-border/50 overflow-hidden rounded-md border border-border/60">
           {checks.map((check) => (
             <div key={check.id} className="flex items-center justify-between gap-3 px-3 py-2">

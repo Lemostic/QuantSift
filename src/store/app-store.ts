@@ -134,8 +134,23 @@ export function migrateAppState(
     }
   }
 
-  if (p.marketDataSource !== "eastmoney" && p.marketDataSource !== "recorded") {
-    p.marketDataSource = "eastmoney";
+  // ---- v10 ----
+  // 实时源升级为可切换提供商：旧的 "eastmoney" 语义映射到 "auto"
+  // （东财优先，失败自动回退新浪/腾讯）。
+  if (fromVersion < 10) {
+    if (p.marketDataSource === "eastmoney") {
+      p.marketDataSource = "auto";
+    }
+  }
+
+  if (
+    p.marketDataSource !== "auto" &&
+    p.marketDataSource !== "eastmoney" &&
+    p.marketDataSource !== "sina" &&
+    p.marketDataSource !== "tencent" &&
+    p.marketDataSource !== "recorded"
+  ) {
+    p.marketDataSource = "auto";
   }
   if (typeof p.allowOfflineFallback !== "boolean") {
     p.allowOfflineFallback = true;
@@ -177,7 +192,7 @@ export const useAppStore = create<AppState>()(
       theme: "dark",
       recentModules: [],
       contentPadding: DEFAULT_PADDING,
-      marketDataSource: "eastmoney",
+      marketDataSource: "auto",
       allowOfflineFallback: true,
       aiProviders: defaultAiProviders(),
       aiFactorConfig: defaultFactorConfig(DEFAULT_FACTOR_TAGS),
@@ -220,7 +235,7 @@ export const useAppStore = create<AppState>()(
     {
       name: "quantsift.app-state.v1",
       storage: createJSONStorage(() => localStorage),
-      version: 9,
+      version: 10,
       partialize: (s) => ({
         theme: s.theme,
         recentModules: s.recentModules,

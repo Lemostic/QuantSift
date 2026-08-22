@@ -67,7 +67,7 @@ describe("eastMoneyMarketDataProvider", () => {
   it("normalizes getDailyBars from the native commands", async () => {
     const provider = fakeProvider(async (cmd, args) => {
       expect(cmd).toBe("eastmoney_get_daily_bars");
-      expect(args).toEqual({ instrumentId: "CN:600519", limit: 30 });
+      expect(args).toEqual({ instrumentId: "CN:600519", limit: 30, source: "auto" });
       return [stockBar];
     });
 
@@ -79,6 +79,33 @@ describe("eastMoneyMarketDataProvider", () => {
       adjustment: "forward",
       provider: "eastmoney",
     });
+  });
+
+  it("passes the pinned source to the native command", async () => {
+    const pinned = createEastMoneyMarketDataProvider(async (_cmd, args) => {
+      expect(args).toEqual({ instrumentId: "CN:600519", limit: 30, source: "sina" });
+      return [stockBar];
+    }, "sina");
+    expect(pinned.id).toBe("sina");
+    const bars = await pinned.getDailyBars("CN:600519", 30);
+    expect(bars).toHaveLength(1);
+  });
+
+  it("maps every live source in the registry to the right source arg", async () => {
+    const seen = new Map<string, string>();
+    const handler: InvokeFn = async (_cmd, args) => {
+      seen.set(String((args as { source?: string }).source), "ok");
+      return [stockBar];
+    };
+    const reg = new ProviderRegistry({
+      eastmoney: createEastMoneyMarketDataProvider(handler, "eastmoney"),
+      sina: createEastMoneyMarketDataProvider(handler, "sina"),
+      tencent: createEastMoneyMarketDataProvider(handler, "tencent"),
+    });
+    await reg.provider("eastmoney").getDailyBars("CN:600519", 30);
+    await reg.provider("sina").getDailyBars("CN:600519", 30);
+    await reg.provider("tencent").getDailyBars("CN:600519", 30);
+    expect([...seen.keys()].sort()).toEqual(["eastmoney", "sina", "tencent"]);
   });
 
   it("classifies network failures as EastMoneyError", async () => {
@@ -104,9 +131,12 @@ describe("eastMoneyMarketDataProvider", () => {
 });
 
 describe("ProviderRegistry", () => {
-  it("defaults to the EastMoney and recorded providers", () => {
+  it("defaults to the live and recorded providers", () => {
     const reg = new ProviderRegistry();
+    expect(reg.provider("auto").id).toBe("eastmoney");
     expect(reg.provider("eastmoney").id).toBe("eastmoney");
+    expect(reg.provider("sina").id).toBe("sina");
+    expect(reg.provider("tencent").id).toBe("tencent");
     expect(reg.provider("recorded").id).toBe("recorded-fixture");
   });
 
@@ -201,6 +231,51 @@ describe("loadWithFallback", () => {
     expect(result.recommendations).toHaveLength(0);
     expect(result.fellBack).toBe(true);
     expect(result.error).toMatch(/fixture 损坏/);
+  });
+
+  it("keeps live data when only some instruments fail", async () => {
+    const bars = await recordedMarketDataProvider.getDailyBars("CN:600519", 30);
+    const partial: MarketDataProvider = {
+      id: "eastmoney",
+      listInstruments: async () => [
+        stockInstrument,
+        { ...stockInstrument, id: "CN:999999", symbol: "999999" },
+      ],
+      getDailyBars: async (id) => {
+        if (id === "CN:600519") return bars;
+        throw new Error("网络错误: 该标的源不可达");
+      },
+    };
+    const reg = new ProviderRegistry({ eastmoney: partial });
+
+    const result = await loadWithFallback(
+      ["CN:600519", "CN:999999"],
+      "eastmoney",
+      true,
+      reg,
+    );
+
+    // 单个标失败不拖垮看板：保留实时数据，错误经 error 报告。
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].instrument.id).toBe("CN:600519");
+    expect(result.source).toBe("eastmoney");
+    expect(result.fellBack).toBe(false);
+    expect(result.error).toMatch(/CN:999999/);
+  });
+
+  it("loads through the pinned sina provider via the configured source", async () => {
+    const bars = await recordedMarketDataProvider.getDailyBars("CN:600519", 30);
+    const sinaProvider: MarketDataProvider = {
+      id: "sina",
+      listInstruments: async () => [stockInstrument],
+      getDailyBars: async () => bars,
+    };
+    const reg = new ProviderRegistry({ sina: sinaProvider });
+
+    const result = await loadWithFallback(["CN:600519"], "sina", true, reg);
+    expect(result.source).toBe("sina");
+    expect(result.fellBack).toBe(false);
+    expect(result.recommendations).toHaveLength(1);
   });
 
   it("keeps recorded provider usable directly", async () => {
