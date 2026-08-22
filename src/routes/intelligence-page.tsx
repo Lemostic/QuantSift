@@ -342,8 +342,10 @@ function SessionDetail({
         </div>
       </div>
 
-      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
-        <div className="min-w-0 space-y-4">
+      {/* 左侧内容决定面板高度；右侧会话内容绝对定位并撑满剩余高度，
+          消息超出时才出现滚动条，避免把整个面板撑高。 */}
+      <div className="relative flex flex-col gap-4 p-4 lg:flex-row">
+        <div className="min-w-0 space-y-4 lg:min-w-0 lg:flex-1 lg:pr-[332px]">
           {session.report ? (
             <CompositeReportView session={session} />
           ) : (
@@ -436,12 +438,14 @@ function SessionDetail({
           <MemoryPanel sessions={memory} />
         </div>
 
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[10px] font-semibold">
+        {/* 右侧会话内容：lg 下绝对定位于面板右侧并撑满剩余高度，
+            消息超出时滚动；移动端回到自然流。 */}
+        <div className="flex min-h-0 w-full flex-col lg:absolute lg:inset-y-4 lg:right-4 lg:w-[300px]">
+          <div className="flex shrink-0 items-center gap-2 text-[10px] font-semibold">
             <Brain size={13} className="text-primary" />
             会话内容
           </div>
-          <div className="mt-2 max-h-[46vh] space-y-2 overflow-y-auto pr-1">
+          <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {session.messages.map((message) => (
               <div
                 key={message.id}
