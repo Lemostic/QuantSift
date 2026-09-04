@@ -5,9 +5,16 @@ dist-ssr
 *.local
 .vite-preview*.log
 .vscode/*
-!.vscode/extensions.json
 .idea
 .DS_Store
+# 本仓库不跟踪的点开头目录（按用户要求 untrack）
+.githooks/
+.trellis/
+.vscode/
+# AI 编码工具本地状态目录，不入仓库
+.agents/
+.claude/
+.codex/
 *.suo
 *.ntvs*
 *.njsproj
